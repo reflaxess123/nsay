@@ -1,0 +1,63 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "nsay",
+  "version": "0.1.0",
+  "identifier": "com.nsay.app",
+  "build": {
+    "beforeDevCommand": "npm run dev",
+    "devUrl": "http://localhost:1420",
+    "beforeBuildCommand": "npm run build",
+    "frontendDist": "../ui/build"
+  },
+  "app": {
+    "windows": [
+      {
+        "label": "main",
+        "title": "nsay",
+        "width": 1280,
+        "height": 820,
+        "minWidth": 980,
+        "minHeight": 640,
+        "decorations": false,
+        "transparent": true,
+        "shadow": false,
+        "resizable": true,
+        "dragDropEnabled": true,
+        "visible": true
+      }
+    ],
+    "security": {
+      "csp": null,
+      "assetProtocol": {
+        "enable": true,
+        "scope": ["**"]
+      }
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": ["nsis"],
+    "publisher": "puzix",
+    "shortDescription": "Local AI image/video toolkit (rembg / upscale / interp)",
+    "longDescription": "Local AI toolkit: background removal (BRIA-RMBG), upscale (Real-ESRGAN), frame interpolation (RIFE). Per-backend sidecars for CUDA / DirectML / Vulkan / CoreML / CPU.",
+    "category": "Productivity",
+    "copyright": "Copyright (c) 2026 puzix",
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ],
+    "windows": {
+      "webviewInstallMode": {
+        "type": "embedBootstrapper"
+      },
+      "nsis": {
+        "installMode": "currentUser",
+        "displayLanguageSelector": false,
+        "compression": "lzma"
+      }
+    }
+  }
+}

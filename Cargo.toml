@@ -1,0 +1,14 @@
+[workspace]
+members = ["src-tauri"]
+exclude = ["crates/*"]
+resolver = "2"
+
+# crates/ is excluded so each inference-backend sidecar (CPU, CUDA, DML,
+# CoreML, Vulkan, ...) is its own workspace and Cargo's feature unification
+# can't merge GPU features into a CPU-only build.
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+strip = true

@@ -1,0 +1,31 @@
+# Rust / Cargo
+target/
+**/Cargo.lock.bak
+
+# Tauri
+src-tauri/gen/schemas/
+
+# Node / Vite / SvelteKit
+ui/node_modules/
+ui/build/
+ui/.svelte-kit/
+ui/.vite/
+ui/dist/
+
+# Local config (committed example, not real secrets)
+nsay.toml
+nsay.local.toml
+
+# ONNX models — user downloads via Settings → Models
+models/*.onnx
+models/*.bin
+!models/.gitkeep
+
+# Logs
+*.log
+
+# OS / IDE
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

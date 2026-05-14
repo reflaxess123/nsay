@@ -1,0 +1,25 @@
+# Copy to nsay.toml (gitignored). Surgical writes via toml_edit preserve
+# comments and field order.
+
+[backend]
+# Per-tool backend selection. "auto" walks BACKEND_PRIORITY = [cuda, dml,
+# vulkan, coreml, cpu] and picks the first sidecar present next to the exe.
+choice = "auto"  # "auto" | "cuda" | "dml" | "vulkan" | "coreml" | "cpu"
+
+[models]
+# Where downloaded ONNX files live (relative to exe, or absolute).
+dir = "models"
+
+[rembg]
+# Default model id (matches catalog in src-tauri/src/models.rs)
+model = "bria-rmbg-1.4"
+
+[upscale]
+model = "real-esrgan-x4plus"
+
+[interp]
+model = "rife-4.22"
+
+[ui]
+# Theme override; "system" follows OS dark/light.
+theme = "system"
