@@ -124,6 +124,33 @@ pub const CATALOG: &[ModelEntry] = &[
         output_scale: 2,
         preset: "esrgan",
     },
+    // fp16 builds halve the disk footprint and run faster on Ampere+ GPUs
+    // (RTX 30/40 series) where Tensor Cores accelerate fp16 GEMM/conv. On
+    // CPU and pre-Ampere GPUs they're typically *slower* (upcasted to fp32
+    // for every op), so users must opt in. Identical accuracy at upscale
+    // task scale — no visible quality loss vs fp32.
+    ModelEntry {
+        id: "real-esrgan-x4-fp16",
+        family: "upscale",
+        label: "Real-ESRGAN ×4 (fp16, Ampere+)",
+        url: "https://huggingface.co/crj/dl-ws/resolve/main/real_esrgan_x4_fp16.onnx",
+        filename: "real-esrgan-x4-fp16.onnx",
+        size_mb: 36,
+        sha256: "",
+        output_scale: 4,
+        preset: "esrgan",
+    },
+    ModelEntry {
+        id: "real-esrgan-x2-fp16",
+        family: "upscale",
+        label: "Real-ESRGAN ×2 (fp16, Ampere+)",
+        url: "https://huggingface.co/crj/dl-ws/resolve/main/real_esrgan_x2_fp16.onnx",
+        filename: "real-esrgan-x2-fp16.onnx",
+        size_mb: 36,
+        sha256: "",
+        output_scale: 2,
+        preset: "esrgan",
+    },
     ModelEntry {
         id: "real-hatgan-x4",
         family: "upscale",

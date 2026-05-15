@@ -7,7 +7,19 @@ use nsay_upscale_lib::ort::execution_providers::CUDAExecutionProvider;
 
 fn main() {
     if let Err(e) = nsay_upscale_lib::run(|b| {
-        b.with_execution_providers([CUDAExecutionProvider::default().build().error_on_failure()])
+        // TF32 is Ampere's reduced-precision matmul format (10-bit mantissa
+        // instead of 23) — math accelerated by Tensor Cores at FP16 rates
+        // while keeping FP32 dynamic range. Safe to enable globally: no
+        // visible quality loss on SR tasks, ~20-40% speedup on HAT/SwinIR
+        // and other matmul-heavy archs. ORT default is *off*, which is
+        // strange for an inference framework — we enable it explicitly.
+        // Pre-Ampere GPUs ignore the flag.
+        b.with_execution_providers([
+            CUDAExecutionProvider::default()
+                .with_tf32(true)
+                .build()
+                .error_on_failure()
+        ])
     }) {
         eprintln!("nsay-upscale-cuda error: {e:#}");
         std::process::exit(1);

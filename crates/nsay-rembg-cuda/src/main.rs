@@ -11,7 +11,15 @@ use nsay_rembg_lib::ort::execution_providers::CUDAExecutionProvider;
 
 fn main() {
     if let Err(e) = nsay_rembg_lib::run(|b| {
-        b.with_execution_providers([CUDAExecutionProvider::default().build().error_on_failure()])
+        // TF32 reduced-precision matmul on Ampere+ Tensor Cores. Big win
+        // on BiRefNet (transformer-heavy), modest on RMBG-1.4 (mostly
+        // conv). See nsay-upscale-cuda for the full rationale.
+        b.with_execution_providers([
+            CUDAExecutionProvider::default()
+                .with_tf32(true)
+                .build()
+                .error_on_failure()
+        ])
     }) {
         eprintln!("nsay-rembg-cuda error: {e:#}");
         std::process::exit(1);
