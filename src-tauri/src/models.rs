@@ -197,6 +197,23 @@ pub const CATALOG: &[ModelEntry] = &[
         output_scale: 0,
         preset: "rife",
     },
+    // RealBasicVSR x4 — temporal video super-resolution. ONNX export is
+    // dead (mmcv:grid_sampler unsupported in ORT) so the file is a
+    // TorchScript .pt loaded via tch-rs / libtorch in nsay-vidsr-*.
+    // Empty url: the user generates the .pt locally via
+    // `scripts/convert-realbasicvsr.py` against the official .pth from
+    // https://github.com/ckkelvinchan/RealBasicVSR/releases.
+    ModelEntry {
+        id: "realbasicvsr-x4",
+        family: "vidsr",
+        label: "RealBasicVSR ×4 (temporal, manual install)",
+        url: "",
+        filename: "realbasicvsr-x4.pt",
+        size_mb: 100,
+        sha256: "",
+        output_scale: 4,
+        preset: "realbasicvsr",
+    },
 ];
 
 pub fn find(id: &str) -> Option<&'static ModelEntry> {

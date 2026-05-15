@@ -20,6 +20,8 @@ pub struct Config {
     #[serde(default)]
     pub interp: ToolCfg,
     #[serde(default)]
+    pub vidsr: ToolCfg,
+    #[serde(default)]
     pub ui: UiCfg,
 }
 
@@ -82,6 +84,7 @@ impl Config {
             rembg: ToolCfg { model: "bria-rmbg-1.4".into() },
             upscale: ToolCfg { model: "real-esrgan-x4".into() },
             interp: ToolCfg { model: String::new() },
+            vidsr: ToolCfg { model: "realbasicvsr-x4".into() },
             ui: UiCfg::default(),
         }
     }

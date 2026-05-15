@@ -6,6 +6,7 @@
   import { upscaleInit } from "$lib/state/upscale.svelte.ts";
   import { vidUpscaleInit } from "$lib/state/vidUpscale.svelte.ts";
   import { vidSlowInit } from "$lib/state/vidSlow.svelte.ts";
+  import { vidsrInit } from "$lib/state/vidsr.svelte.ts";
 
   type Props = { children?: import("svelte").Snippet };
   let { children }: Props = $props();
@@ -18,6 +19,7 @@
     upscaleInit();
     vidUpscaleInit();
     vidSlowInit();
+    vidsrInit();
   });
 
   const tabs = [
@@ -25,6 +27,7 @@
     { id: "img-upscale", label: "img upscale", href: "/upscale" },
     { id: "vid-upscale", label: "vid upscale", href: "/vid-upscale" },
     { id: "vid-slow",    label: "vid slow",    href: "/interp" },
+    { id: "vidsr",       label: "vid SR",      href: "/vidsr" },
   ];
 
   const currentTab = $derived.by(() => {

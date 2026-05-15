@@ -1,0 +1,21 @@
+[package]
+name = "nsay-vidsr-cuda"
+version = "0.1.0"
+edition = "2021"
+description = "CUDA video super-resolution sidecar for nsay (RealBasicVSR via libtorch+CUDA)"
+
+[workspace]
+
+[[bin]]
+name = "nsay-vidsr-cuda"
+path = "src/main.rs"
+
+[dependencies]
+nsay-vidsr-lib = { path = "../nsay-vidsr-lib" }
+anyhow = "1"
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+strip = true

@@ -24,7 +24,7 @@
   type BackendState = { choice: string; available: string[] };
 
   type Props = {
-    family: "rembg" | "upscale" | "interp";
+    family: "rembg" | "upscale" | "interp" | "vidsr";
     model?: string;
     disabled?: boolean;
   };

@@ -142,6 +142,15 @@ pub fn ensure_model(
     if dest.exists() {
         return Ok(dest);
     }
+    // Manual-install models (catalog has empty url) — no auto-download
+    // path. Tell the user where to put the file. Used for vidsr/RealBasicVSR
+    // where the .pt is generated locally from the official .pth.
+    if entry.url.is_empty() {
+        anyhow::bail!(
+            "model {} requires manual install: place {} in {} (see scripts/convert-realbasicvsr.py for vidsr models)",
+            id, entry.filename, dir.display(),
+        );
+    }
 
     // Mark in-flight so list_models / Settings UI greys it out, and so
     // we don't double-download if the user mashes the button.

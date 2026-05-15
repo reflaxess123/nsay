@@ -13,7 +13,7 @@ use std::path::PathBuf;
 /// Mirrors ui/src/lib/settings/Backend.svelte.
 pub const BACKEND_PRIORITY: &[&str] = &["cuda", "dml", "vulkan", "coreml", "cpu"];
 
-pub const TOOLS: &[&str] = &["rembg", "upscale", "interp"];
+pub const TOOLS: &[&str] = &["rembg", "upscale", "interp", "vidsr"];
 
 pub fn sidecar_bin_name(tool: &str, backend: &str) -> String {
     if cfg!(target_os = "windows") {

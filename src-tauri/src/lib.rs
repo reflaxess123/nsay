@@ -66,6 +66,7 @@ pub fn run() {
             tools::upscale::upscale_run,
             tools::video::video_upscale_run,
             tools::video::video_interp_run,
+            tools::video::video_vidsr_run,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

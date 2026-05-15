@@ -30,6 +30,10 @@ src-tauri/binaries/runtime/*.dll
 # (BtbN GPL build, ffmpeg.exe + ffprobe.exe ~400 MB total, never commit)
 src-tauri/binaries/ffmpeg/
 
+# libtorch bundle — fetched via scripts/fetch-libtorch.ps1
+# (CUDA 12.4 release ~2.5 GB extracted, never commit)
+src-tauri/binaries/libtorch/
+
 # Scratch / workspace junk
 icon_new.png
 *.tmp.png

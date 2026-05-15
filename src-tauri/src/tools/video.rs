@@ -54,6 +54,33 @@ pub async fn video_upscale_run(
     .map_err(|e| format!("video join failed: {e}"))?
 }
 
+/// True video super-resolution via tch-rs / RealBasicVSR (PLAN.md F4).
+/// Differs from video_upscale_run in that the sidecar consumes the
+/// stream in fixed-size chunks (clip-based VSR) and outputs upscaled
+/// frames with temporal consistency rather than independent per-frame
+/// SR. Encoder + ffmpeg pipe stay the same.
+#[tauri::command]
+pub async fn video_vidsr_run(
+    input: String,
+    output: String,
+    scale: Option<u32>,
+    window: Option<u32>,
+    model: Option<String>,
+    state: tauri::State<'_, crate::state_cmd::AppState>,
+    models_state: tauri::State<'_, crate::models_cmd::ModelState>,
+    app: tauri::AppHandle,
+) -> Result<VideoResult, String> {
+    let scale = scale.unwrap_or(4).clamp(2, 4);
+    let window = window.unwrap_or(15).clamp(3, 30);
+    let backend_choice = state.backend_choice.lock().unwrap().clone();
+    let models_state_cloned = (*models_state).clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        run_vidsr_blocking(input, output, scale, window, model, backend_choice, models_state_cloned, app)
+    })
+    .await
+    .map_err(|e| format!("video-vidsr join failed: {e}"))?
+}
+
 /// RIFE frame interpolation. Two output modes:
 ///   - "boost" (default): same duration, fps × factor, audio kept.
 ///                        e.g. 30fps@10s → 60fps@10s.
@@ -365,6 +392,126 @@ fn run_interp_blocking(
         encoder: encoder.family.to_string(),
     };
     let _ = app.emit("vid-interp-done", &result);
+    Ok(result)
+}
+
+fn run_vidsr_blocking(
+    input: String,
+    output: String,
+    scale: u32,
+    window: u32,
+    model_override: Option<String>,
+    backend_choice: String,
+    models_state: crate::models_cmd::ModelState,
+    app: tauri::AppHandle,
+) -> Result<VideoResult, String> {
+    let input_pb = PathBuf::from(&input);
+    let output_pb = PathBuf::from(&output);
+    if !input_pb.exists() {
+        return Err(format!("input not found: {}", input_pb.display()));
+    }
+    if let Some(parent) = output_pb.parent() {
+        std::fs::create_dir_all(parent).ok();
+    }
+
+    let (backend, sidecar_path) = tools::resolve_sidecar("vidsr", &backend_choice)
+        .map_err(|e| e.to_string())?;
+
+    let cfg = crate::config::Config::load().map_err(|e| e.to_string())?;
+    let model_id = model_override.filter(|s| !s.is_empty()).unwrap_or_else(|| {
+        if cfg.vidsr.model.is_empty() { "realbasicvsr-x4".to_string() } else { cfg.vidsr.model.clone() }
+    });
+    let model_path = crate::models_cmd::ensure_model(&model_id, &models_state, &app)
+        .map_err(|e| format!("model {} could not be obtained: {}", model_id, e))?;
+
+    let probe = ffmpeg::probe(&input_pb).map_err(|e| format!("ffprobe: {e}"))?;
+    let encoder = ffmpeg::detect_encoder();
+    let out_w = probe.width * scale;
+    let out_h = probe.height * scale;
+
+    tracing::info!(
+        "video_vidsr: in={} {}x{} fps={}/{} N~={} | backend={} scale=x{} window={} model={}",
+        input, probe.width, probe.height, probe.fps_num, probe.fps_den,
+        probe.total_frames, backend, scale, window, model_id,
+    );
+
+    let _ = app.emit(
+        "vid-vidsr-start",
+        serde_json::json!({
+            "total_frames": probe.total_frames,
+            "src_w": probe.width, "src_h": probe.height,
+            "out_w": out_w, "out_h": out_h,
+            "fps_num": probe.fps_num, "fps_den": probe.fps_den,
+            "backend": backend, "encoder": encoder.family,
+        }),
+    );
+
+    let ffmpeg_bin = ffmpeg::ffmpeg_path().map_err(|e| e.to_string())?;
+
+    // Stage 1: ffmpeg decode → raw RGB.
+    let mut read = build_cmd(&ffmpeg_bin);
+    read.args([
+        "-hide_banner", "-loglevel", "error",
+        "-i",
+    ]).arg(&input_pb).args([
+        "-f", "rawvideo",
+        "-pix_fmt", "rgb24",
+        "-",
+    ]).stdout(Stdio::piped()).stderr(Stdio::piped());
+    let mut read_proc = read.spawn().map_err(|e| format!("spawn ffmpeg-read: {e}"))?;
+    spawn_logger("ffmpeg-read", read_proc.stderr.take().unwrap());
+    let read_stdout = read_proc.stdout.take().unwrap();
+
+    // Stage 2: vidsr sidecar (chunk-based; consumes N frames at a time).
+    let mut side = build_cmd(&sidecar_path);
+    side.arg("--stream")
+        .arg("--width").arg(probe.width.to_string())
+        .arg("--height").arg(probe.height.to_string())
+        .arg("--scale").arg(scale.to_string())
+        .arg("--window").arg(window.to_string())
+        .arg("--model").arg(&model_path)
+        .stdin(Stdio::from(read_stdout))
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped());
+    let mut side_proc = side.spawn().map_err(|e| format!("spawn sidecar: {e}"))?;
+    let side_stdout = side_proc.stdout.take().unwrap();
+    spawn_progress("vidsr", "vid-vidsr-progress", side_proc.stderr.take().unwrap(), app.clone(), probe.total_frames);
+
+    // Stage 3: ffmpeg encode + audio mux from source.
+    let fps_str = format!("{}/{}", probe.fps_num, probe.fps_den);
+    let dims_str = format!("{}x{}", out_w, out_h);
+    let mut write = build_cmd(&ffmpeg_bin);
+    write.args([
+        "-hide_banner", "-loglevel", "error", "-y",
+        "-framerate", &fps_str,
+        "-f", "rawvideo",
+        "-pix_fmt", "rgb24",
+        "-s", &dims_str,
+        "-i", "-",
+        "-i",
+    ]).arg(&input_pb).args([
+        "-map", "0:v",
+        "-map", "1:a?",
+        "-c:v", encoder.h264,
+        "-pix_fmt", "yuv420p",
+        "-c:a", "copy",
+        "-shortest",
+    ]).arg(&output_pb)
+        .stdin(Stdio::from(side_stdout))
+        .stdout(Stdio::null())
+        .stderr(Stdio::piped());
+    let mut write_proc = write.spawn().map_err(|e| format!("spawn ffmpeg-write: {e}"))?;
+    spawn_logger("ffmpeg-write", write_proc.stderr.take().unwrap());
+
+    wait_pipeline(read_proc, side_proc, write_proc)?;
+
+    let result = VideoResult {
+        output: output_pb.to_string_lossy().into_owned(),
+        frames: probe.total_frames,
+        backend: backend.clone(),
+        encoder: encoder.family.to_string(),
+    };
+    let _ = app.emit("vid-vidsr-done", &result);
     Ok(result)
 }
 
