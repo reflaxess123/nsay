@@ -169,7 +169,18 @@ if ($LASTEXITCODE -ne 0) { throw "torch install failed (cu124 index unreachable?
 Write-Host "==> installing DOVE requirements" -ForegroundColor Cyan
 $reqFile = Join-Path $repo "requirements.txt"
 if (-not (Test-Path $reqFile)) { throw "requirements.txt not found at $reqFile" }
-& uv pip install --python $pyenv -r $reqFile
+
+# DOVE requirements.txt pulls SwissArmyTransformer>=0.4.12, which transitively
+# depends on deepspeed. deepspeed has no Windows wheels and its sdist build
+# requires torch already installed in the BUILD environment (uv isolates the
+# build env, so this never works) plus MSVC + nvcc — broken on Windows by
+# design. Both packages are training-only: inference_script.py doesn't import
+# either. Filter both out before pip install.
+# (Caught when first run failed at "Failed to build deepspeed==0.19.0:
+#  AssertionError: Unable to pre-compile ops without torch installed".)
+$reqFiltered = Join-Path $repo "requirements_inference.txt"
+Get-Content $reqFile | Where-Object { $_ -notmatch '^\s*(SwissArmyTransformer|deepspeed)' } | Set-Content -Encoding utf8 $reqFiltered
+& uv pip install --python $pyenv -r $reqFiltered
 if ($LASTEXITCODE -ne 0) { throw "requirements.txt install failed" }
 
 # Extras the README mentions explicitly outside requirements.txt:
