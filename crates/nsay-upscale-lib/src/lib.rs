@@ -17,12 +17,17 @@
 //   exit:   0 success, 1 failure
 //
 // Pipeline (per frame):
-//   1. If user --scale != model native (`--model-scale`), resize source by
-//      ratio = scale/model_scale before inference. The model still runs at
-//      its native ratio, so total scaling = scale.
+//   1. Inference ALWAYS runs on full-resolution source pixels at the
+//      model's native scale. No pre-shrink even when user scale < model
+//      scale — the SR model needs to see original detail to invent it.
 //   2. If both dims ≤ SINGLE_PASS_LIMIT → one inference pass on the whole
 //      image. Otherwise tile with TILE_SIZE × TILE_SIZE chunks and Hann-
 //      window blend the results to hide seams.
+//   3. If user scale != model native scale, post-resize the model output
+//      via Lanczos3 to the target dimensions. Lanczos3 preserves detail
+//      on downscale (e.g. x4 model → x1.5 final = downscale by 2.67),
+//      Triangle/bilinear smears it. Trade-off vs the old pre-shrink:
+//      more inference compute (full-res source) for vastly better quality.
 
 use std::io::{Read, Write};
 use std::path::PathBuf;
@@ -232,25 +237,35 @@ fn process_frame(
     session: &mut Session, input_name: &str, src: &RgbImage,
     src_w: u32, src_h: u32, scale: f32, model_scale: u32,
 ) -> Result<RgbImage> {
-    let ratio = scale / model_scale as f32;
-    let (in_w, in_h, rgb) = if (ratio - 1.0).abs() < f32::EPSILON {
-        (src_w, src_h, src.clone())
+    // Native model output dims — what the SR model produces on the
+    // full-res source. We always run inference here, then post-resize to
+    // user target if needed. This is the opposite of the old behaviour
+    // (which pre-shrunk source to fit user scale, blurring detail before
+    // the model ever saw it).
+    let model_w = src_w * model_scale;
+    let model_h = src_h * model_scale;
+    let model_out = if src_w <= SINGLE_PASS_LIMIT && src_h <= SINGLE_PASS_LIMIT {
+        let arr = pixels_to_chw(src, 0, 0, src_w, src_h);
+        let tile = run_tile(session, input_name, arr, src_w, src_h, model_scale)?;
+        chw_to_image(&tile, model_w, model_h)
     } else {
-        let new_w = ((src_w as f32 * ratio).round() as u32).max(1);
-        let new_h = ((src_h as f32 * ratio).round() as u32).max(1);
-        let scaled = DynamicImage::ImageRgb8(src.clone())
-            .resize_exact(new_w, new_h, FilterType::Triangle);
-        (new_w, new_h, scaled.to_rgb8())
+        tiled_inference(session, input_name, src, src_w, src_h, model_w, model_h, model_scale)?
     };
-    let out_w = in_w * model_scale;
-    let out_h = in_h * model_scale;
-    if in_w <= SINGLE_PASS_LIMIT && in_h <= SINGLE_PASS_LIMIT {
-        let arr = pixels_to_chw(&rgb, 0, 0, in_w, in_h);
-        let tile = run_tile(session, input_name, arr, in_w, in_h, model_scale)?;
-        Ok(chw_to_image(&tile, out_w, out_h))
-    } else {
-        tiled_inference(session, input_name, &rgb, in_w, in_h, out_w, out_h, model_scale)
+
+    // User-requested final dims.
+    let final_w = ((src_w as f32 * scale).round() as u32).max(1);
+    let final_h = ((src_h as f32 * scale).round() as u32).max(1);
+    if final_w == model_w && final_h == model_h {
+        return Ok(model_out);
     }
+    // Lanczos3 preserves high-frequency detail much better than Triangle
+    // when downscaling — visible difference on photo/film content where
+    // the SR model has invented sharp edges that bilinear would smear.
+    progress("resize", 90);
+    let resized = DynamicImage::ImageRgb8(model_out)
+        .resize_exact(final_w, final_h, FilterType::Lanczos3)
+        .to_rgb8();
+    Ok(resized)
 }
 
 fn pixels_to_chw(
