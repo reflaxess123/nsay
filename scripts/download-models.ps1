@@ -29,6 +29,18 @@ $catalog = @{
         url      = "https://huggingface.co/crj/dl-ws/resolve/main/real_esrgan_x4.onnx"
         filename = "real-esrgan-x4.onnx"
     }
+    "real-esrgan-x2" = @{
+        url      = "https://huggingface.co/crj/dl-ws/resolve/main/real_esrgan_x2.onnx"
+        filename = "real-esrgan-x2.onnx"
+    }
+    "real-hatgan-x4" = @{
+        url      = "https://huggingface.co/crj/dl-ws/resolve/main/real_hatgan_x4.onnx"
+        filename = "real-hatgan-x4.onnx"
+    }
+    "rife-4.9" = @{
+        url      = "https://huggingface.co/yuvraj108c/rife-onnx/resolve/main/rife49_ensemble_True_scale_1_sim.onnx"
+        filename = "rife-4.9.onnx"
+    }
 }
 
 function Download-One($key) {

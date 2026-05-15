@@ -64,7 +64,7 @@
               <path d="M12 3v13"/><path d="m7 12 5 5 5-5"/><path d="M5 21h14"/>
             </svg>
             <span class="empty-title">Перетащи видео сюда</span>
-            <span class="empty-sub">mp4 / mov / mkv / webm</span>
+            <span class="empty-sub">mp4 / mov / mkv / webm · fast per-frame mode</span>
           </button>
         {:else}
           <div class="players">

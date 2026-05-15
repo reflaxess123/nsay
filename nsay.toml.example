@@ -18,7 +18,7 @@ model = "bria-rmbg-1.4"
 model = "real-esrgan-x4"
 
 [interp]
-model = "rife-4.22"
+model = "rife-4.9"
 
 [ui]
 # Theme override; "system" follows OS dark/light.
