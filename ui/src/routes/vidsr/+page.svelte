@@ -105,7 +105,7 @@
             >×{s}</button>
           {/each}
         </div>
-        <label class="window-input" title="Размер клипа который сидекар подаёт модели за один forward pass. Выше = плавнее, но линейно больше VRAM.">
+        <label class="window-input" title="Размер клипа который сидекар подаёт модели за один forward pass. RealBasicVSR (libtorch). Выше = плавнее, но линейно больше VRAM.">
           <span>window</span>
           <input
             type="number"
@@ -116,6 +116,21 @@
             bind:value={vidsrStore.window}
           />
         </label>
+        <!-- FlashVSR-Pro (docker backend) tuning. libtorch sidecars ignore. -->
+        <div class="diff-toggle" role="group" aria-label="FlashVSR режим" title="FlashVSR-Pro (docker). tiny — 8GB VRAM, full — 12+GB.">
+          {#each ["tiny", "full"] as m (m)}
+            <button
+              type="button"
+              class="diff-btn"
+              class:active={vidsrStore.mode === m}
+              disabled={vidsrStore.status === "running"}
+              onclick={() => (vidsrStore.mode = m as "tiny" | "full")}
+            >{m}</button>
+          {/each}
+        </div>
+        <label class="chk" title="Tile VAE — обязательно для 12GB GPU."><input type="checkbox" disabled={vidsrStore.status === "running"} bind:checked={vidsrStore.tileVae} /> tile-vae</label>
+        <label class="chk" title="Tile DiT — снижает peak VRAM."><input type="checkbox" disabled={vidsrStore.status === "running"} bind:checked={vidsrStore.tileDit} /> tile-dit</label>
+        <label class="chk" title="Сохранить аудио из источника."><input type="checkbox" disabled={vidsrStore.status === "running"} bind:checked={vidsrStore.keepAudio} /> audio</label>
         {#if statusLabel}
           <span class="status">{statusLabel}</span>
         {/if}
@@ -251,4 +266,27 @@
     font-size: var(--text-xs); color: var(--danger);
     max-width: 320px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   }
+
+  .diff-toggle {
+    display: inline-flex; background: var(--surface);
+    border: 1px solid var(--border); border-radius: var(--radius-pill);
+    padding: 2px;
+  }
+  .diff-btn {
+    appearance: none; border: none; background: transparent;
+    color: var(--muted); font: 700 var(--text-xs) / 1 inherit;
+    padding: 6px 12px; border-radius: var(--radius-pill); cursor: pointer;
+    text-transform: uppercase; letter-spacing: 0.4px;
+    transition: background 0.15s var(--ease-out), color 0.15s var(--ease-out);
+  }
+  .diff-btn:hover:not(:disabled):not(.active) { color: var(--fg); }
+  .diff-btn.active { background: var(--accent); color: var(--accent-fg); }
+  .diff-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+  .chk {
+    display: inline-flex; align-items: center; gap: 4px;
+    font: 500 var(--text-xs) / 1 inherit; color: var(--muted);
+    cursor: pointer; user-select: none;
+  }
+  .chk input { accent-color: var(--accent); margin: 0; }
 </style>

@@ -46,7 +46,10 @@ nsay/
 │   ├── nsay-upscale-lib/    # shared: Real-ESRGAN + tile blending + streaming
 │   ├── nsay-upscale-{cpu,cuda,dml}/  # thin bins (~13 LOC each)
 │   ├── nsay-interp-lib/     # shared: RIFE 4.9 streaming pipeline
-│   └── nsay-interp-{cpu,cuda,dml}/   # thin bins
+│   ├── nsay-interp-{cpu,cuda,dml}/   # thin bins
+│   ├── nsay-vidsr-lib/      # shared: chunked VSR via tch-rs / libtorch
+│   ├── nsay-vidsr-{cpu,cuda}/        # libtorch backends (RealBasicVSR .pt)
+│   └── nsay-vidsr-docker/   # docker shim → flashvsr-pro:latest container
 ├── ui/                 # SvelteKit (adapter-static, port 1420)
 │   └── src/
 │       ├── lib/
@@ -63,10 +66,13 @@ nsay/
 │           ├── vid-upscale/+page.svelte     # VIDEO upscale (fast per-frame)
 │           └── interp/+page.svelte          # slow-mo / boost FPS (RIFE)
 └── scripts/
-    ├── build-sidecars.ps1     # builds all 9 bin crates, stages DLLs
-    ├── download-models.ps1    # manual ONNX prefetch (UI does the same)
-    ├── fetch-cuda-runtime.ps1 # NVIDIA cuDNN/cuBLAS/cuRT redistributables
-    └── fetch-ffmpeg.ps1       # BtbN GPL static ffmpeg+ffprobe (~400 MB)
+    ├── build-sidecars.ps1         # builds all bin crates, stages DLLs
+    ├── download-models.ps1        # manual ONNX prefetch (UI does the same)
+    ├── fetch-cuda-runtime.ps1     # NVIDIA cuDNN/cuBLAS/cuRT redistributables
+    ├── fetch-ffmpeg.ps1           # BtbN GPL static ffmpeg+ffprobe (~400 MB)
+    ├── fetch-libtorch.ps1         # libtorch 2.6.0+cu124 for tch-rs vidsr (~2.5 GB)
+    ├── convert-realbasicvsr.py    # .pth → .pt TorchScript trace for vidsr-cuda/cpu
+    └── setup-flashvsr-docker.ps1  # git clone --recursive + docker build + HF weights
 ```
 
 ## Sidecar lib refactor
@@ -113,6 +119,46 @@ stdout: raw RGB frames; upscale = same N×scale, interp = 1 + (N-1)*K
 stderr: `stream-ready` once, then `frame N` per output frame
 exit:   0 success, 1 failure
 ```
+
+## Docker backend (FlashVSR-Pro VSR)
+
+`vidsr` имеет 2-й runner — **diffusion-based** через Docker Desktop. Поднят
+потому что современные diffusion VSR модели (FlashVSR / DOVE / DLoRAL) живут
+только в PyTorch + custom CUDA kernels (Block-Sparse-Attention) которые
+**не собираются на Windows native** (Block-Sparse-Attention README: "Linux.").
+
+Архитектура:
+```
+nsay_app.exe → nsay-vidsr-docker.exe (Rust shim) → docker run flashvsr-pro:latest
+                                                    └ python infer.py -i /in/x.mp4 -o /out/
+```
+
+Shim делает 3 вещи: (1) проверяет наличие docker.exe + image + weights dir;
+(2) маппит host paths в `/in /out /workspace/.../models/FlashVSR-v1.1` через
+`docker run -v`; (3) парсит tqdm в stderr контейнера и эмитит `frame N`
+строки наружу — Tauri spawn_progress подхватывает в тот же UI прогресс-бар
+что и libtorch sidecars.
+
+Docker selected как явный backend (не входит в `BACKEND_PRIORITY`, "auto" его
+не выбирает — Docker Desktop тяжёлая зависимость для пользователя). В
+SidePanel docker row видим только когда `family="vidsr"`.
+
+User onboarding:
+1. Поставить Docker Desktop + WSL2 + NVIDIA Container Toolkit (внутри Docker
+   Desktop в современных версиях). Проверка: `docker run --rm --gpus all
+   nvidia/cuda:12.4.0-base-ubuntu22.04 nvidia-smi` должен напечатать GPU.
+2. `.\scripts\setup-flashvsr-docker.ps1` — клонирует FlashVSR-Pro (recursive),
+   `docker build -t flashvsr-pro:latest .` (~30 мин compile Block-Sparse-Attention
+   внутри контейнера), скачивает FlashVSR-v1.1 weights с HF в `%APPDATA%/nsay/
+   models/flashvsr-v1.1/` (~6 GB).
+3. `.\scripts\build-sidecars.ps1 -Tool vidsr -Backend docker` — собирает шим
+   (~50 KB exe, anyhow + regex only).
+4. UI → vid SR → SidePanel → Backend → Docker → запуск.
+
+UI knobs (только для docker, libtorch игнорирует):
+- `mode`: `tiny` (8GB VRAM, default) / `full` (12+GB, лучше детали)
+- `tile-vae` / `tile-dit`: streaming блоками — обязательно для 12GB GPU
+- `audio`: keep audio track from source
 
 ## Backend selection
 

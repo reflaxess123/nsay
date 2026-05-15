@@ -214,6 +214,24 @@ pub const CATALOG: &[ModelEntry] = &[
         output_scale: 4,
         preset: "realbasicvsr",
     },
+    // FlashVSR-Pro — diffusion-based temporal VSR (CVPR 2026). Lives in a
+    // Docker image (LujiaJin/FlashVSR-Pro) because Block-Sparse-Attention is
+    // Linux-only and won't compile on Windows native. Selected via the
+    // "docker" backend; nsay-vidsr-docker.exe spawns `docker run flashvsr-pro:latest`.
+    // Filename here is informational only — the runner doesn't read a file,
+    // weights live in %APPDATA%/nsay/models/flashvsr-v1.1/ and are mounted
+    // into the container by the sidecar.
+    ModelEntry {
+        id: "flashvsr-pro",
+        family: "vidsr",
+        label: "FlashVSR-Pro (diffusion, Docker)",
+        url: "",
+        filename: "flashvsr-v1.1/",
+        size_mb: 6000,
+        sha256: "",
+        output_scale: 4,
+        preset: "flashvsr",
+    },
 ];
 
 pub fn find(id: &str) -> Option<&'static ModelEntry> {

@@ -34,14 +34,22 @@
     disabled = false,
   }: Props = $props();
 
-  const BACKENDS = [
+  // `families` (optional) restricts a backend to specific tools — Docker is
+  // a heavy dep that only the FlashVSR-Pro vidsr runner uses, so we hide
+  // the row on rembg/upscale/interp pages where it would be confusing.
+  const BACKENDS: Array<{ id: string; label: string; sub: string; families?: string[] }> = [
     { id: "cuda",   label: "CUDA",     sub: "NVIDIA GPU" },
     { id: "dml",    label: "DirectML", sub: "Любая Windows GPU" },
     { id: "vulkan", label: "Vulkan",   sub: "AMD / Intel iGPU" },
     { id: "coreml", label: "CoreML",   sub: "Apple Silicon" },
     { id: "cpu",    label: "CPU",      sub: "Slow, no GPU" },
+    { id: "docker", label: "Docker",   sub: "FlashVSR-Pro (diffusion)", families: ["vidsr"] },
   ];
   const PRIORITY = ["cuda", "dml", "vulkan", "coreml", "cpu"];
+
+  const visibleBackends = $derived(
+    BACKENDS.filter((b) => !b.families || b.families.includes(family)),
+  );
 
   let backend = $state<BackendState>({ choice: "auto", available: [] });
   let models = $state<ModelInfo[]>([]);
@@ -102,7 +110,7 @@
   <section class="zone">
     <h3 class="zone-title">Backend</h3>
     <ul class="rows">
-      {#each BACKENDS as b, i (b.id)}
+      {#each visibleBackends as b, i (b.id)}
         {@const enabled = backend.available.includes(b.id)}
         {@const selected = activeBackend === b.id}
         {@const isBest = best === b.id}
