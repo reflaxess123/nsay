@@ -46,6 +46,13 @@ pub enum Preset {
     /// BEN2 (PramaLLC/BEN2). 1024², Lanczos resize, ImageNet normalize,
     /// sigmoid baked into the ONNX export → no extra sigmoid in lib.
     Ben2,
+    /// BiRefNet (onnx-community/BiRefNet-ONNX). 1024², Lanczos resize,
+    /// ImageNet normalize, raw logits output → lib applies sigmoid.
+    BiRefNet,
+    /// MODNet (Xenova/modnet). 512², Triangle resize, [-1,1] normalize
+    /// (mean=0.5 std=0.5), alpha matte output already in [0,1]. Tuned
+    /// for portraits — not a general background remover.
+    Modnet,
 }
 
 impl Preset {
@@ -53,20 +60,26 @@ impl Preset {
         match s {
             "bria-rmbg" => Ok(Self::BriaRmbg),
             "ben2"      => Ok(Self::Ben2),
-            other => bail!("unknown rembg preset: {} (expected bria-rmbg | ben2)", other),
+            "birefnet"  => Ok(Self::BiRefNet),
+            "modnet"    => Ok(Self::Modnet),
+            other => bail!(
+                "unknown rembg preset: {} (expected bria-rmbg | ben2 | birefnet | modnet)",
+                other,
+            ),
         }
     }
 
     fn input_size(&self) -> u32 {
         match self {
-            Self::BriaRmbg | Self::Ben2 => 1024,
+            Self::BriaRmbg | Self::Ben2 | Self::BiRefNet => 1024,
+            Self::Modnet => 512,
         }
     }
 
     fn resize_filter(&self) -> FilterType {
         match self {
-            Self::BriaRmbg => FilterType::Triangle,
-            Self::Ben2     => FilterType::Lanczos3,
+            Self::BriaRmbg | Self::Modnet => FilterType::Triangle,
+            Self::Ben2 | Self::BiRefNet   => FilterType::Lanczos3,
         }
     }
 
@@ -74,17 +87,19 @@ impl Preset {
     fn normalize(&self) -> ([f32; 3], [f32; 3]) {
         match self {
             Self::BriaRmbg => ([0.5, 0.5, 0.5], [1.0, 1.0, 1.0]),
-            Self::Ben2     => ([0.485, 0.456, 0.406], [0.229, 0.224, 0.225]),
+            Self::Ben2 | Self::BiRefNet => ([0.485, 0.456, 0.406], [0.229, 0.224, 0.225]),
+            // MODNet: equivalent to `px/127.5 - 1` → range [-1, 1].
+            Self::Modnet => ([0.5, 0.5, 0.5], [0.5, 0.5, 0.5]),
         }
     }
 
     /// Whether to apply sigmoid to raw model output before min-max.
-    /// BRIA RMBG: outputs already saturate to near-binary, min-max is enough.
-    /// BEN2: sigmoid is baked into the ONNX export → don't double-apply.
+    /// BRIA RMBG: outputs already saturate to near-binary.
+    /// BEN2: sigmoid is baked into the ONNX export.
+    /// MODNet: outputs alpha matte already in [0,1].
+    /// BiRefNet: outputs raw logits → lib must sigmoid.
     fn needs_sigmoid(&self) -> bool {
-        match self {
-            Self::BriaRmbg | Self::Ben2 => false,
-        }
+        matches!(self, Self::BiRefNet)
     }
 }
 

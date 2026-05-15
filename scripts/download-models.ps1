@@ -29,6 +29,14 @@ $catalog = @{
         url      = "https://huggingface.co/PramaLLC/BEN2/resolve/main/BEN2_Base.onnx"
         filename = "ben2-base.onnx"
     }
+    "birefnet-fp16" = @{
+        url      = "https://huggingface.co/onnx-community/BiRefNet-ONNX/resolve/main/onnx/model_fp16.onnx"
+        filename = "birefnet-fp16.onnx"
+    }
+    "modnet-portrait" = @{
+        url      = "https://huggingface.co/Xenova/modnet/resolve/main/onnx/model.onnx"
+        filename = "modnet-portrait.onnx"
+    }
     "real-esrgan-x4" = @{
         url      = "https://huggingface.co/crj/dl-ws/resolve/main/real_esrgan_x4.onnx"
         filename = "real-esrgan-x4.onnx"

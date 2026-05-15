@@ -68,6 +68,35 @@ pub const CATALOG: &[ModelEntry] = &[
         output_scale: 0,
         preset: "ben2",
     },
+    // BiRefNet base — onnx-community/BiRefNet-ONNX, fp16 build. 1024²
+    // Lanczos, ImageNet normalize, raw logits output (lib applies sigmoid).
+    // Bilateral Reference for High-Resolution DIS — strong on intricate
+    // edges. Heavier than BEN2 but often produces cleaner cuts on hair.
+    ModelEntry {
+        id: "birefnet-fp16",
+        family: "rembg",
+        label: "BiRefNet (fp16, sharp edges)",
+        url: "https://huggingface.co/onnx-community/BiRefNet-ONNX/resolve/main/onnx/model_fp16.onnx",
+        filename: "birefnet-fp16.onnx",
+        size_mb: 490,
+        sha256: "",
+        output_scale: 0,
+        preset: "birefnet",
+    },
+    // MODNet — Xenova/modnet. 512² Triangle resize, [-1,1] normalize.
+    // Tiny (~25 MB) but trained for portraits only — flagged as such in
+    // the UI label. Don't use as default for product/anime cutouts.
+    ModelEntry {
+        id: "modnet-portrait",
+        family: "rembg",
+        label: "MODNet (portrait, fast)",
+        url: "https://huggingface.co/Xenova/modnet/resolve/main/onnx/model.onnx",
+        filename: "modnet-portrait.onnx",
+        size_mb: 26,
+        sha256: "",
+        output_scale: 0,
+        preset: "modnet",
+    },
     // Upscale catalogue. All from crj/dl-ws — same export convention
     // (input "input.1", dynamic [N, 3, H, W], pixel/255 normalisation).
     ModelEntry {
