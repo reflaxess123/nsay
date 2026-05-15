@@ -54,6 +54,20 @@ pub const CATALOG: &[ModelEntry] = &[
         output_scale: 0,
         preset: "bria-rmbg",
     },
+    // BEN2 base — PramaLLC/BEN2. 1024² Lanczos resize, ImageNet normalize,
+    // sigmoid baked into ONNX. Better edge / hair quality than RMBG-1.4 in
+    // the BEN2 paper's benchmark.
+    ModelEntry {
+        id: "ben2-base",
+        family: "rembg",
+        label: "BEN2 base (general)",
+        url: "https://huggingface.co/PramaLLC/BEN2/resolve/main/BEN2_Base.onnx",
+        filename: "ben2-base.onnx",
+        size_mb: 223,
+        sha256: "",
+        output_scale: 0,
+        preset: "ben2",
+    },
     // Upscale catalogue. All from crj/dl-ws — same export convention
     // (input "input.1", dynamic [N, 3, H, W], pixel/255 normalisation).
     ModelEntry {

@@ -89,6 +89,14 @@ fn rembg_run_blocking(
     // interleaved with per-item progress later.
     let model_path = crate::models_cmd::ensure_model(&model_id, &models_state, &app)
         .map_err(|e| format!("model {} could not be obtained: {}", model_id, e))?;
+    // Look up preprocessing flavour for the chosen model so the sidecar
+    // can dispatch (BRIA / BEN2 / future BiRefNet etc.). Fallback to
+    // bria-rmbg if the catalog entry is gone (shouldn't happen — ensure_model
+    // would already have errored).
+    let preset = crate::models::find(&model_id)
+        .map(|m| m.preset)
+        .unwrap_or("bria-rmbg")
+        .to_string();
 
     // Resolve each input → output path, grouping by parent dir.
     let total = inputs.len();
@@ -160,7 +168,7 @@ fn rembg_run_blocking(
             output_pb.display()
         );
 
-        match run_one(&sidecar, &model_path, &input_pb, output_pb, choke, idx, &app) {
+        match run_one(&sidecar, &model_path, &input_pb, output_pb, &preset, choke, idx, &app) {
             Ok(()) => {
                 let _ = app.emit(
                     "rembg-item-done",
@@ -206,6 +214,7 @@ fn run_one(
     model_path: &Path,
     input_pb: &Path,
     output_pb: &Path,
+    preset: &str,
     choke: f32,
     idx: usize,
     app: &tauri::AppHandle,
@@ -217,6 +226,8 @@ fn run_one(
         .arg(input_pb)
         .arg("--output")
         .arg(output_pb)
+        .arg("--preset")
+        .arg(preset)
         .arg("--choke")
         .arg(format!("{:.4}", choke))
         .stdin(Stdio::null())
