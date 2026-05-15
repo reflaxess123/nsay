@@ -13,8 +13,11 @@ path = "src/main.rs"
 [dependencies]
 # Pipeline logic + image deps from shared lib. ort declared directly with
 # `cuda` feature so cargo unifies it into the lib's transitive ort dep.
+# `tensorrt` adds the TensorRTExecutionProvider binding — only useful if
+# the TRT runtime DLLs (nvinfer_10.dll, etc.) are alongside the exe.
+# Stage them via scripts/fetch-tensorrt-runtime.ps1.
 nsay-upscale-lib = { path = "../nsay-upscale-lib" }
-ort = { version = "=2.0.0-rc.10", default-features = false, features = ["download-binaries", "ndarray", "cuda"] }
+ort = { version = "=2.0.0-rc.10", default-features = false, features = ["download-binaries", "ndarray", "cuda", "tensorrt"] }
 anyhow = "1"
 
 [profile.release]
