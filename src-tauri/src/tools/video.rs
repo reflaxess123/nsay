@@ -54,43 +54,28 @@ pub async fn video_upscale_run(
     .map_err(|e| format!("video join failed: {e}"))?
 }
 
-/// True video super-resolution. Two backends share this command:
-///   - cpu/cuda  → libtorch + RealBasicVSR (3-process streaming pipeline)
-///   - docker    → FlashVSR-Pro container (single-process file→file)
-///
-/// `window` only matters for libtorch (RealBasicVSR clip size).
-/// `mode` / `tile_vae` / `tile_dit` / `keep_audio` only matter for docker
-/// (FlashVSR-Pro tuning knobs). Each backend ignores the other's params.
+/// True video super-resolution via tch-rs / RealBasicVSR (PLAN.md F4).
+/// Differs from video_upscale_run in that the sidecar consumes the
+/// stream in fixed-size chunks (clip-based VSR) and outputs upscaled
+/// frames with temporal consistency rather than independent per-frame
+/// SR. Encoder + ffmpeg pipe stay the same.
 #[tauri::command]
-#[allow(clippy::too_many_arguments)]
 pub async fn video_vidsr_run(
     input: String,
     output: String,
     scale: Option<u32>,
     window: Option<u32>,
     model: Option<String>,
-    mode: Option<String>,
-    tile_vae: Option<bool>,
-    tile_dit: Option<bool>,
-    keep_audio: Option<bool>,
     state: tauri::State<'_, crate::state_cmd::AppState>,
     models_state: tauri::State<'_, crate::models_cmd::ModelState>,
     app: tauri::AppHandle,
 ) -> Result<VideoResult, String> {
     let scale = scale.unwrap_or(4).clamp(2, 4);
     let window = window.unwrap_or(15).clamp(3, 30);
-    let mode = mode.unwrap_or_else(|| "tiny".to_string());
-    let tile_vae = tile_vae.unwrap_or(true);
-    let tile_dit = tile_dit.unwrap_or(true);
-    let keep_audio = keep_audio.unwrap_or(true);
     let backend_choice = state.backend_choice.lock().unwrap().clone();
     let models_state_cloned = (*models_state).clone();
     tauri::async_runtime::spawn_blocking(move || {
-        run_vidsr_blocking(
-            input, output, scale, window, model,
-            mode, tile_vae, tile_dit, keep_audio,
-            backend_choice, models_state_cloned, app,
-        )
+        run_vidsr_blocking(input, output, scale, window, model, backend_choice, models_state_cloned, app)
     })
     .await
     .map_err(|e| format!("video-vidsr join failed: {e}"))?
@@ -410,17 +395,12 @@ fn run_interp_blocking(
     Ok(result)
 }
 
-#[allow(clippy::too_many_arguments)]
 fn run_vidsr_blocking(
     input: String,
     output: String,
     scale: u32,
     window: u32,
     model_override: Option<String>,
-    mode: String,
-    tile_vae: bool,
-    tile_dit: bool,
-    keep_audio: bool,
     backend_choice: String,
     models_state: crate::models_cmd::ModelState,
     app: tauri::AppHandle,
@@ -437,10 +417,23 @@ fn run_vidsr_blocking(
     let (backend, sidecar_path) = tools::resolve_sidecar("vidsr", &backend_choice)
         .map_err(|e| e.to_string())?;
 
+    let cfg = crate::config::Config::load().map_err(|e| e.to_string())?;
+    let model_id = model_override.filter(|s| !s.is_empty()).unwrap_or_else(|| {
+        if cfg.vidsr.model.is_empty() { "realbasicvsr-x4".to_string() } else { cfg.vidsr.model.clone() }
+    });
+    let model_path = crate::models_cmd::ensure_model(&model_id, &models_state, &app)
+        .map_err(|e| format!("model {} could not be obtained: {}", model_id, e))?;
+
     let probe = ffmpeg::probe(&input_pb).map_err(|e| format!("ffprobe: {e}"))?;
     let encoder = ffmpeg::detect_encoder();
     let out_w = probe.width * scale;
     let out_h = probe.height * scale;
+
+    tracing::info!(
+        "video_vidsr: in={} {}x{} fps={}/{} N~={} | backend={} scale=x{} window={} model={}",
+        input, probe.width, probe.height, probe.fps_num, probe.fps_den,
+        probe.total_frames, backend, scale, window, model_id,
+    );
 
     let _ = app.emit(
         "vid-vidsr-start",
@@ -451,37 +444,6 @@ fn run_vidsr_blocking(
             "fps_num": probe.fps_num, "fps_den": probe.fps_den,
             "backend": backend, "encoder": encoder.family,
         }),
-    );
-
-    // Docker backend = FlashVSR-Pro container, file→file. The shim handles
-    // its own ffmpeg/encode inside the image, so we don't build a 3-process
-    // pipeline here — just spawn the sidecar and forward its tqdm progress.
-    if backend == "docker" {
-        tracing::info!(
-            "video_vidsr (docker): in={} {}x{} N~={} | scale=x{} mode={} tile_vae={} tile_dit={} keep_audio={}",
-            input, probe.width, probe.height, probe.total_frames,
-            scale, mode, tile_vae, tile_dit, keep_audio,
-        );
-        return run_vidsr_docker_blocking(
-            &input_pb, &output_pb, scale,
-            &mode, tile_vae, tile_dit, keep_audio,
-            &sidecar_path, &backend, &encoder.family,
-            probe.total_frames, app,
-        );
-    }
-
-    // libtorch path needs a model file on disk; docker doesn't.
-    let cfg = crate::config::Config::load().map_err(|e| e.to_string())?;
-    let model_id = model_override.filter(|s| !s.is_empty()).unwrap_or_else(|| {
-        if cfg.vidsr.model.is_empty() { "realbasicvsr-x4".to_string() } else { cfg.vidsr.model.clone() }
-    });
-    let model_path = crate::models_cmd::ensure_model(&model_id, &models_state, &app)
-        .map_err(|e| format!("model {} could not be obtained: {}", model_id, e))?;
-
-    tracing::info!(
-        "video_vidsr (libtorch): in={} {}x{} fps={}/{} N~={} | backend={} scale=x{} window={} model={}",
-        input, probe.width, probe.height, probe.fps_num, probe.fps_den,
-        probe.total_frames, backend, scale, window, model_id,
     );
 
     let ffmpeg_bin = ffmpeg::ffmpeg_path().map_err(|e| e.to_string())?;
@@ -548,66 +510,6 @@ fn run_vidsr_blocking(
         frames: probe.total_frames,
         backend: backend.clone(),
         encoder: encoder.family.to_string(),
-    };
-    let _ = app.emit("vid-vidsr-done", &result);
-    Ok(result)
-}
-
-/// Docker backend for vidsr — single subprocess. The container does its own
-/// ffmpeg decode/encode + GPU inference, so there's no pipe to wire up.
-/// We just hand it --input/--output and let it work; progress comes back as
-/// `frame N` lines from the shim (it parses tqdm internally).
-#[allow(clippy::too_many_arguments)]
-fn run_vidsr_docker_blocking(
-    input_pb: &Path,
-    output_pb: &Path,
-    scale: u32,
-    mode: &str,
-    tile_vae: bool,
-    tile_dit: bool,
-    keep_audio: bool,
-    sidecar_path: &Path,
-    backend: &str,
-    encoder_family: &str,
-    total_frames: u64,
-    app: tauri::AppHandle,
-) -> Result<VideoResult, String> {
-    let mut cmd = build_cmd(sidecar_path);
-    cmd.arg("--input").arg(input_pb)
-        .arg("--output").arg(output_pb)
-        .arg("--scale").arg(scale.to_string())
-        .arg("--mode").arg(mode);
-    // Use --no-* opt-outs because the shim defaults are all true. This keeps
-    // the command short in the common case (`--mode tiny --scale 4`).
-    if !tile_vae   { cmd.arg("--no-tile-vae"); }
-    if !tile_dit   { cmd.arg("--no-tile-dit"); }
-    if !keep_audio { cmd.arg("--no-keep-audio"); }
-
-    // Discard stdout — the shim only writes to stderr (progress + logs);
-    // anything on stdout would just be noise we don't want to forward.
-    cmd.stdin(Stdio::null())
-        .stdout(Stdio::null())
-        .stderr(Stdio::piped());
-
-    let mut child = cmd.spawn().map_err(|e| format!("spawn vidsr-docker: {e}"))?;
-    spawn_progress(
-        "vidsr-docker",
-        "vid-vidsr-progress",
-        child.stderr.take().unwrap(),
-        app.clone(),
-        total_frames,
-    );
-
-    let status = child.wait().map_err(|e| format!("vidsr-docker wait: {e}"))?;
-    if !status.success() {
-        return Err(format!("vidsr-docker exited {:?}", status.code()));
-    }
-
-    let result = VideoResult {
-        output: output_pb.to_string_lossy().into_owned(),
-        frames: total_frames,
-        backend: backend.to_string(),
-        encoder: encoder_family.to_string(),
     };
     let _ = app.emit("vid-vidsr-done", &result);
     Ok(result)

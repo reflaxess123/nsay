@@ -9,7 +9,6 @@ import { listen } from "@tauri-apps/api/event";
 
 export type Scale = 2 | 3 | 4;
 export type Status = "idle" | "running" | "done" | "error";
-export type DiffMode = "tiny" | "full";
 
 export const vidsrStore = $state({
   input: "" as string,
@@ -24,13 +23,6 @@ export const vidsrStore = $state({
   // artifacts; higher = smoother but linearly more VRAM.
   window: 15,
   model: "realbasicvsr-x4",
-  // FlashVSR-Pro (docker backend) tuning. Ignored by libtorch sidecars.
-  // tiny = lighter VAE branch, fits 8 GB VRAM with tiling enabled;
-  // full = stronger detail, needs >12 GB without tiling.
-  mode: "tiny" as DiffMode,
-  tileVae: true,
-  tileDit: true,
-  keepAudio: true,
   probe: null as null | {
     src_w: number; src_h: number;
     out_w: number; out_h: number;
@@ -120,10 +112,6 @@ export async function vidsrRun() {
       scale: vidsrStore.scale,
       window: vidsrStore.window,
       model: vidsrStore.model,
-      mode: vidsrStore.mode,
-      tileVae: vidsrStore.tileVae,
-      tileDit: vidsrStore.tileDit,
-      keepAudio: vidsrStore.keepAudio,
     });
   } catch (e) {
     vidsrStore.status = "error";

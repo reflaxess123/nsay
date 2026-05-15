@@ -33,10 +33,7 @@ pub fn set_backend_choice(
     choice: String,
     state: tauri::State<AppState>,
 ) -> Result<(), String> {
-    // "docker" is vidsr-only — explicit choice for the FlashVSR-Pro container.
-    // It is NOT in BACKEND_PRIORITY so "auto" never picks it; the user has
-    // to opt in deliberately (Docker Desktop is a heavy dependency to assume).
-    let valid = ["auto", "cuda", "dml", "vulkan", "coreml", "cpu", "docker"];
+    let valid = ["auto", "cuda", "dml", "vulkan", "coreml", "cpu"];
     if !valid.contains(&choice.as_str()) {
         return Err(format!("unknown backend: {}", choice));
     }
