@@ -19,7 +19,7 @@
 
 param(
     [switch]$Cpu,
-    [string]$Version = "2.5.0",
+    [string]$Version = "2.6.0",
     [string]$CudaTag = "cu124"
 )
 
@@ -28,8 +28,11 @@ $root = Resolve-Path "$PSScriptRoot\.."
 $dest = Join-Path $root "src-tauri\binaries\libtorch"
 
 $flavor = if ($Cpu) { "cpu" } else { $CudaTag }
+# The URL must encode `+` as `%2B` — pytorch.org's S3 bucket rejects the
+# raw character with a misleading "Access Denied" rather than a 404.
 $zipName = "libtorch-win-shared-with-deps-$Version+$flavor.zip"
-$url = "https://download.pytorch.org/libtorch/$flavor/$zipName"
+$urlName = "libtorch-win-shared-with-deps-$Version%2B$flavor.zip"
+$url = "https://download.pytorch.org/libtorch/$flavor/$urlName"
 
 Write-Host "libtorch: $Version + $flavor" -ForegroundColor Cyan
 Write-Host "url:      $url" -ForegroundColor DarkGray
