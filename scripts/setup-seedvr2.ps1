@@ -33,7 +33,7 @@
 param(
     [switch]$Force,        # nuke and rebuild venv + re-clone + redownload
     [switch]$SkipWeights,  # skip HF download (use existing files)
-    [switch]$Lite,         # use 3B model instead of 7B (for <12 GB GPUs)
+    [switch]$Heavy,        # download 7B Sharp instead of 3B (manual rename required)
     [string]$CudaIndex = "https://download.pytorch.org/whl/cu124"
 )
 
@@ -97,7 +97,7 @@ Write-Host "    root    : $root" -ForegroundColor DarkGray
 Write-Host "    repo    : $repo" -ForegroundColor DarkGray
 Write-Host "    venv    : $venv" -ForegroundColor DarkGray
 Write-Host "    weights : $models" -ForegroundColor DarkGray
-Write-Host "    profile : $(if ($Lite) {'3B FP8 (lite, ~3.4 GB)'} else {'7B Sharp FP8 (~8.2 GB)'})" -ForegroundColor DarkGray
+Write-Host "    profile : $(if ($Heavy) {'7B Sharp FP8 (~8.2 GB) — needs manual rename'} else {'3B FP8 (~3.4 GB) — recommended'})" -ForegroundColor DarkGray
 Write-Host ""
 
 if (-not (Test-Path $root)) { New-Item -ItemType Directory -Force -Path $root | Out-Null }
@@ -154,23 +154,36 @@ if (-not (Test-Path $reqFile)) { throw "requirements.txt not found at $reqFile" 
 & uv pip install --python $pyenv -r $reqFile
 if ($LASTEXITCODE -ne 0) { throw "requirements.txt install failed" }
 
-# huggingface_hub for the snapshot_download call below — not in requirements
-# but bundled with diffusers as a transitive dep, so this is just a safety net.
-& uv pip install --python $pyenv "huggingface_hub>=0.25"
-if ($LASTEXITCODE -ne 0) { throw "huggingface_hub install failed" }
+# transformers 5.x has a regression in is_flash_attn_2_available() that crashes
+# with KeyError: 'flash_attn' in PACKAGE_DISTRIBUTION_MAPPING during diffusers
+# import — even when flash_attn is intentionally absent. Pin to 4.x where this
+# code path doesn't exist. SeedVR2 was developed against transformers 4.x and
+# diffusers 0.37 doesn't require 5.x either.
+# (Discovered when smoke test crashed on transformers==5.8.1; downgrading to
+#  4.57.6 fixed it. Also pulls huggingface_hub down from 1.x to 0.36 which is
+#  what diffusers 0.37 expects.)
+Write-Host "==> pinning transformers<5 (5.x has flash_attn KeyError regression)" -ForegroundColor Cyan
+& uv pip install --python $pyenv "transformers<5.0" "huggingface_hub<1.0"
+if ($LASTEXITCODE -ne 0) { throw "transformers downgrade failed" }
 
 # --- Step 5: weights ---------------------------------------------------
 
 if (-not $SkipWeights) {
     if (-not (Test-Path $models)) { New-Item -ItemType Directory -Force -Path $models | Out-Null }
 
-    # Pick model based on -Lite flag.
-    if ($Lite) {
-        $modelFile = "seedvr2_ema_3b_fp8_e4m3fn.safetensors"
-        $modelLabel = "3B FP8 (~3.4 GB)"
-    } else {
+    # Default to 3B FP8 — its filename ('seedvr2_ema_3b_fp8_e4m3fn.safetensors')
+    # exactly matches what inference_cli.py's --dit_model enum expects. The
+    # 7B Sharp variant in numz/SeedVR2_comfyUI is named without the suffix
+    # the CLI enum wants ('_mixed_block35_fp16'), so picking it requires
+    # either renaming or finding the mixed-precision build elsewhere.
+    # Use -Heavy to fetch the 7B Sharp anyway (you'll need to figure out
+    # the right name yourself).
+    if ($Heavy) {
         $modelFile = "seedvr2_ema_7b_sharp_fp8_e4m3fn.safetensors"
-        $modelLabel = "7B Sharp FP8 (~8.2 GB)"
+        $modelLabel = "7B Sharp FP8 (~8.2 GB) — name doesn't match CLI enum, manual rename needed"
+    } else {
+        $modelFile = "seedvr2_ema_3b_fp8_e4m3fn.safetensors"
+        $modelLabel = "3B FP8 (~3.4 GB) — matches CLI enum, recommended"
     }
     $vaeFile = "ema_vae_fp16.safetensors"
 
