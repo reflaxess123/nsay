@@ -132,6 +132,40 @@ if (-not $SkipBuild) {
         if ($LASTEXITCODE -ne 0) { throw "git clone failed" }
     }
 
+    # --- Step 1.5: patch Dockerfile in-place ---
+    #
+    # Upstream Dockerfile lets ninja default to N_cores parallel nvcc jobs and
+    # compiles Block-Sparse-Attention for every CUDA arch in TORCH_CUDA_ARCH_LIST.
+    # On a 12-core box that peaks 24+ GB RAM and trips OOM-kill on BuildKit
+    # (gRPC EOF), and the multi-arch compile adds 5-10 min of waste for users
+    # who only care about their own GPU. Patch in:
+    #   ENV MAX_JOBS=4              — cap concurrent nvcc to 4 (~12 GB peak)
+    #   ENV TORCH_CUDA_ARCH_LIST    — only the user's GPU compute capability
+    # Idempotent: re-running this script doesn't double-patch.
+    $arch = $env:NSAY_CUDA_ARCH
+    if (-not $arch) { $arch = "8.6" }   # RTX 30xx default; override via env for other GPUs
+    $maxJobs = $env:NSAY_MAX_JOBS
+    if (-not $maxJobs) { $maxJobs = "4" }
+
+    $dockerfilePath = Join-Path $cloneDir "Dockerfile"
+    if (Test-Path $dockerfilePath) {
+        $content = Get-Content $dockerfilePath -Raw
+        if ($content -match "ENV MAX_JOBS") {
+            Write-Host "==> Dockerfile already patched (MAX_JOBS / TORCH_CUDA_ARCH_LIST)" -ForegroundColor DarkGray
+        } else {
+            $needle = "WORKDIR /workspace/FlashVSR-Pro/Block-Sparse-Attention"
+            if ($content -match [regex]::Escape($needle)) {
+                Write-Host "==> patching Dockerfile: MAX_JOBS=$maxJobs, TORCH_CUDA_ARCH_LIST=`"$arch`"" -ForegroundColor Cyan
+                $patch = "ENV MAX_JOBS=$maxJobs`nENV TORCH_CUDA_ARCH_LIST=`"$arch`"`n$needle"
+                $content = $content -replace [regex]::Escape($needle), $patch
+                Set-Content -NoNewline -Path $dockerfilePath -Value $content
+            } else {
+                Write-Warning "Block-Sparse-Attention WORKDIR not found in Dockerfile — skipping patch."
+                Write-Warning "If build OOMs, manually add MAX_JOBS / TORCH_CUDA_ARCH_LIST envs."
+            }
+        }
+    }
+
     # --- Step 2: docker build (this is the long step; CUDA kernel compile
     #     of Block-Sparse-Attention happens inside the image build) ----
     Write-Host ""
@@ -139,7 +173,17 @@ if (-not $SkipBuild) {
     Write-Host "    This compiles Block-Sparse-Attention CUDA kernels inside the" -ForegroundColor DarkGray
     Write-Host "    container — typically 20-30 min on first run, then cached." -ForegroundColor DarkGray
     & docker build -t $ImageTag $cloneDir
-    if ($LASTEXITCODE -ne 0) { throw "docker build failed" }
+    if ($LASTEXITCODE -ne 0) {
+        Write-Host ""
+        Write-Host "Hint: if you see 'gRPC EOF' or BuildKit died mid-step 14," -ForegroundColor Yellow
+        Write-Host "raise WSL2 memory in %USERPROFILE%\.wslconfig:" -ForegroundColor Yellow
+        Write-Host "    [wsl2]" -ForegroundColor Yellow
+        Write-Host "    memory=24GB" -ForegroundColor Yellow
+        Write-Host "    swap=8GB" -ForegroundColor Yellow
+        Write-Host "Then run: wsl --shutdown   (Docker Desktop will restart)" -ForegroundColor Yellow
+        Write-Host "And re-run this script — cached steps will be re-used." -ForegroundColor Yellow
+        throw "docker build failed"
+    }
 } else {
     Write-Host "==> skipping clone + build (-SkipBuild)" -ForegroundColor Yellow
 }
