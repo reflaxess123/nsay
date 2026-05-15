@@ -39,6 +39,17 @@ param(
 
 $ErrorActionPreference = "Stop"
 
+# SeedVR2's memory_manager.py prints "📊 Initial cuda memory: ..." at import
+# time. On Windows consoles set to a non-UTF8 codepage (cp1251 in RU locales,
+# cp866 etc.), Python crashes with UnicodeEncodeError before any work runs.
+# Forcing utf-8 IO is the canonical fix and harmless on consoles that
+# already are utf-8 (Windows Terminal, modern PowerShell). Set early so
+# every subsequent python invocation in this script inherits it.
+$env:PYTHONIOENCODING = "utf-8"
+# PYTHONUTF8=1 is the stronger sibling — sets the entire interpreter to
+# utf-8 mode (PEP 540), covers stdin/files/etc, not just stdout.
+$env:PYTHONUTF8 = "1"
+
 function Need-Cmd($name, $hint) {
     $cmd = Get-Command $name -ErrorAction SilentlyContinue
     if (-not $cmd) {
@@ -247,6 +258,8 @@ Write-Host ""
 Write-Host "done." -ForegroundColor Green
 Write-Host ""
 Write-Host "Try a real inference (replace input/output paths):" -ForegroundColor White
+Write-Host "  `$env:PYTHONIOENCODING = 'utf-8'   # required on RU/non-UTF8 Windows consoles"
+Write-Host "  `$env:PYTHONUTF8 = '1'"
 Write-Host "  cd $repo"
 Write-Host "  $pyenv inference_cli.py ``"
 Write-Host "    --input  C:\path\to\input.mp4 ``"
@@ -259,3 +272,5 @@ Write-Host "Notes:" -ForegroundColor White
 Write-Host "  - --batch_size must be 4n+1 (1, 5, 9, 13, 17, 21...)"
 Write-Host "  - --resolution is the SHORT side of the output (1080 → 1080p)"
 Write-Host "  - First inference downloads ~5 GB diffusers/peft model cache to ~/.cache/huggingface"
+Write-Host "  - The Rust shim nsay-vidsr-python (when added) sets PYTHONIOENCODING/PYTHONUTF8"
+Write-Host "    automatically so users won't have to."
