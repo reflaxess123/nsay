@@ -207,6 +207,87 @@ pub const CATALOG: &[ModelEntry] = &[
         output_scale: 4,
         preset: "esrgan",
     },
+    // === Anime upscale catalogue ===
+    // Each entry below was verified by physically loading the ONNX and
+    // running inference on ORT 1.26 (NCHW float32 RGB [0,1]). The styler /
+    // Sirosky / Kim2091 / Phips ecosystems all export through neosr at
+    // opset 17 — clean dynamic shape, no ReduceMean axes traps.
+    //
+    // RealESRGAN x4plus Anime 6B — xinntao's heavy-quality anime ESRGAN.
+    // Best perceptual quality for anime stills/screenshots in this list,
+    // ~7× heavier than the Compact variants below.
+    ModelEntry {
+        id: "real-esrgan-anime-x4",
+        family: "upscale",
+        label: "Real-ESRGAN ×4 Anime 6B (quality)",
+        url: "https://github.com/styler00dollar/VSGAN-tensorrt-docker/releases/download/models/RealESRGAN_x4plus_anime_6B_opset16.onnx",
+        filename: "real-esrgan-anime-x4.onnx",
+        size_mb: 17,
+        sha256: "",
+        output_scale: 4,
+        preset: "esrgan",
+    },
+    // Real-ESRGAN Compact (animevideov3) — xinntao's recommended
+    // "watch-anime-while-it-renders" model. Tiny architecture, 4x scale,
+    // optimised for video frame throughput over peak still quality.
+    ModelEntry {
+        id: "compact-anime-x4",
+        family: "upscale",
+        label: "Compact ×4 Anime Video (fast video)",
+        url: "https://github.com/styler00dollar/VSGAN-tensorrt-docker/releases/download/models/realesr-animevideov3.onnx",
+        filename: "compact-anime-x4.onnx",
+        size_mb: 3,
+        sha256: "",
+        output_scale: 4,
+        preset: "esrgan",
+    },
+    // Real-ESRGAN Compact xs ×2 — sibling of compact-anime-x4. Native ×2
+    // is preferred over running ×4 on a downscaled source for ×1.5/×2
+    // jobs, same logic as real-esrgan-x2 vs real-esrgan-x4.
+    ModelEntry {
+        id: "compact-anime-x2",
+        family: "upscale",
+        label: "Compact ×2 Anime Video XS (fast video)",
+        url: "https://github.com/styler00dollar/VSGAN-tensorrt-docker/releases/download/models/RealESRGANv2-animevideo-xsx2_op18_sim.onnx",
+        filename: "compact-anime-x2.onnx",
+        size_mb: 3,
+        sha256: "",
+        output_scale: 2,
+        preset: "esrgan",
+    },
+    // Modern Spanimation V2 — TNTwise's anime SPAN, the smallest non-trivial
+    // anime upscaler that exists. clamp(0,1) baked into the graph (op20),
+    // ORT 1.26 handles op20 fine. Use over compact-anime-x2 when you need
+    // even more throughput at slight quality cost.
+    ModelEntry {
+        id: "spanimation-v2-x2",
+        family: "upscale",
+        label: "Spanimation V2 ×2 (tiny, fastest)",
+        url: "https://github.com/styler00dollar/VSGAN-tensorrt-docker/releases/download/models/2x_ModernSpanimationV2_clamp_op20.onnx",
+        filename: "spanimation-v2-x2.onnx",
+        size_mb: 2,
+        sha256: "",
+        output_scale: 2,
+        preset: "esrgan",
+    },
+    // === Top-quality general-purpose ===
+    // Kim2091's UltraSharp V2 — DAT-2 (Dual Aggregation Transformer v2),
+    // successor to the legendary 4x-UltraSharp ESRGAN. Best general-photo
+    // quality in this catalogue, but ~25× slower per tile than Compact.
+    // DAT-2 doesn't need a special preset — same [0,1] NCHW interface as
+    // ESRGAN; "hat" preset is fine since both go through the same
+    // clamp-and-cast post path in nsay-upscale-lib.
+    ModelEntry {
+        id: "ultrasharp-v2-x4",
+        family: "upscale",
+        label: "UltraSharp V2 ×4 DAT-2 (top quality)",
+        url: "https://huggingface.co/Kim2091/UltraSharpV2/resolve/main/4x-UltraSharpV2_fp32_op17.onnx",
+        filename: "ultrasharp-v2-x4.onnx",
+        size_mb: 52,
+        sha256: "",
+        output_scale: 4,
+        preset: "hat",
+    },
     // Frame interpolation — RIFE (Real-time Intermediate Flow Estimation).
     // 4.26 has no public ONNX export (only .pth in Practical-RIFE);
     // we'll add a self-converted 4.26 later. 4.9 from yuvraj108c is the
