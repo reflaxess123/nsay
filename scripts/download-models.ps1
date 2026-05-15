@@ -25,9 +25,9 @@ $catalog = @{
         url      = "https://huggingface.co/briaai/RMBG-1.4/resolve/main/onnx/model_fp16.onnx"
         filename = "bria-rmbg-1.4-fp16.onnx"
     }
-    "real-esrgan-x4plus" = @{
-        url      = "https://huggingface.co/qualcomm/Real-ESRGAN-x4plus/resolve/main/Real-ESRGAN-x4plus.onnx"
-        filename = "real-esrgan-x4plus.onnx"
+    "real-esrgan-x4" = @{
+        url      = "https://huggingface.co/crj/dl-ws/resolve/main/real_esrgan_x4.onnx"
+        filename = "real-esrgan-x4.onnx"
     }
 }
 

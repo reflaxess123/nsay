@@ -22,27 +22,30 @@ pub struct ModelInfo {
     pub installed: bool,
     pub downloading: bool,
     pub local_path: Option<String>,
+    /// Catalogue field; 0 for non-upscale entries. UI uses it to gate the
+    /// scale toggle against the model's native ratio.
+    pub output_scale: u32,
 }
 
 /// Pub so tools::rembg / future tools share the same resolution logic.
 /// Order:
-///   1. NSAY_MODELS_DIR env var (dev knob — `tauri dev` runs from
-///      target/debug/ which doesn't have a `models/` next to it).
+///   1. NSAY_MODELS_DIR env var (dev knob; absolute path).
 ///   2. ModelState's configured `dir` if absolute.
-///   3. <exe_parent>/<dir> for relative configs (release layout).
+///   3. `<user-data>/nsay/models/` — default. Same place a packaged build
+///      uses, so dev and prod look at the same files unless you override.
+///      User-data resolves to %APPDATA% on Windows, ~/Library/Application
+///      Support on macOS, ~/.local/share on Linux.
 pub fn resolve_models_dir(state: &ModelState) -> PathBuf {
     if let Ok(env_dir) = std::env::var("NSAY_MODELS_DIR") {
         return PathBuf::from(env_dir);
     }
     let dir = state.models_dir.lock().unwrap().clone();
     if dir.is_absolute() {
-        dir
-    } else {
-        std::env::current_exe()
-            .ok()
-            .and_then(|e| e.parent().map(|p| p.join(&dir)))
-            .unwrap_or(dir)
+        return dir;
     }
+    // Relative `dir` (default "models") gets joined under the user data root.
+    let base = dirs::data_dir().unwrap_or_else(|| PathBuf::from("."));
+    base.join("nsay").join(&dir)
 }
 
 #[tauri::command]
@@ -62,6 +65,7 @@ pub fn list_models(state: tauri::State<ModelState>) -> Vec<ModelInfo> {
                 installed,
                 downloading: in_flight.contains(&m.id.to_string()),
                 local_path: installed.then(|| path.to_string_lossy().into_owned()),
+                output_scale: m.output_scale,
             }
         })
         .collect()

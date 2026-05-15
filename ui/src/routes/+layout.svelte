@@ -1,20 +1,35 @@
 <script lang="ts">
   import { page } from "$app/stores";
+  import { onMount } from "svelte";
   import { getCurrentWindow } from "@tauri-apps/api/window";
+  import { rembgInit } from "$lib/state/rembg.svelte.ts";
+  import { upscaleInit } from "$lib/state/upscale.svelte.ts";
+  import { vidUpscaleInit } from "$lib/state/vidUpscale.svelte.ts";
+  import { vidSlowInit } from "$lib/state/vidSlow.svelte.ts";
 
   type Props = { children?: import("svelte").Snippet };
   let { children }: Props = $props();
 
+  // Boot the per-tool stores once at app start so backend events fire
+  // listeners regardless of which route is currently mounted. Without
+  // this, events for an unmounted route would be silently dropped.
+  onMount(() => {
+    rembgInit();
+    upscaleInit();
+    vidUpscaleInit();
+    vidSlowInit();
+  });
+
   const tabs = [
-    { id: "rembg",    label: "Rembg",    href: "/rembg",    sub: "Удаление фона" },
-    { id: "upscale",  label: "Upscale",  href: "/upscale",  sub: "Апскейл" },
-    { id: "interp",   label: "Interp",   href: "/interp",   sub: "Интерполяция" },
-    { id: "settings", label: "Settings", href: "/settings", sub: "Настройки" },
+    { id: "img-rembg",   label: "img rembg",   href: "/rembg" },
+    { id: "img-upscale", label: "img upscale", href: "/upscale" },
+    { id: "vid-upscale", label: "vid upscale", href: "/vid-upscale" },
+    { id: "vid-slow",    label: "vid slow",    href: "/interp" },
   ];
 
   const currentTab = $derived.by(() => {
     const path = $page.url.pathname.replace(/\/+$/, "") || "/";
-    return tabs.find((t) => path === t.href || path.startsWith(t.href + "/"))?.id ?? "rembg";
+    return tabs.find((t) => path === t.href || path.startsWith(t.href + "/"))?.id ?? "img-rembg";
   });
 
   const win = getCurrentWindow();
@@ -49,13 +64,13 @@
 
     <div class="winctl">
       <button class="wbtn" onclick={minimize} aria-label="Minimize">
-        <svg viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M3 8 L13 8"/></svg>
+        <svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><path d="M3 8 L13 8"/></svg>
       </button>
       <button class="wbtn" onclick={maximize} aria-label="Maximize">
-        <svg viewBox="0 0 16 16" width="11" height="11" fill="none" stroke="currentColor" stroke-width="1.4"><rect x="3.5" y="3.5" width="9" height="9" rx="1.5"/></svg>
+        <svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="3.5" y="3.5" width="9" height="9" rx="1.6"/></svg>
       </button>
       <button class="wbtn close-x" onclick={close} aria-label="Close">
-        <svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M4 4 L12 12 M12 4 L4 12"/></svg>
+        <svg viewBox="0 0 16 16" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><path d="M4 4 L12 12 M12 4 L4 12"/></svg>
       </button>
     </div>
   </div>
@@ -147,7 +162,11 @@
   :global(::-webkit-scrollbar-thumb) { background: var(--border); border-radius: 99px; }
   :global(::-webkit-scrollbar-thumb:hover) { background: var(--muted); }
 
-  /* ===== APP SHELL ===== */
+  /* ===== APP SHELL =====
+     Rounded frame — Tauri window is transparent + decorationless, so the
+     rounded corners on this element are what the user actually sees as
+     the window outline. The hairline border crisps the edge against any
+     desktop background. ===== */
   .app-shell {
     position: fixed;
     inset: 0;
@@ -155,8 +174,8 @@
     flex-direction: column;
     background: var(--bg);
     border-radius: var(--radius-lg);
-    overflow: hidden;
     border: 1px solid var(--border);
+    overflow: hidden;
     animation: appear 0.3s var(--ease-out);
   }
   @keyframes appear {
@@ -230,13 +249,13 @@
     display: inline-flex;
     align-items: center;
     justify-content: flex-end;
-    gap: 2px;
+    gap: 4px;
   }
   .wbtn {
-    width: 30px;
-    height: 28px;
+    width: 38px;
+    height: 32px;
     border: none;
-    border-radius: var(--radius-sm);
+    border-radius: var(--radius-md);
     background: transparent;
     color: var(--muted);
     display: inline-flex;

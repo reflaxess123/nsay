@@ -15,7 +15,7 @@ dir = "models"
 model = "bria-rmbg-1.4"
 
 [upscale]
-model = "real-esrgan-x4plus"
+model = "real-esrgan-x4"
 
 [interp]
 model = "rife-4.22"

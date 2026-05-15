@@ -106,12 +106,19 @@ Sidecars (отдельная команда — workspace excluded):
 ## CUDA / DirectML / Vulkan deps
 
 - **CUDA**: бинарь линкуется с `ort` (cuda feature). На юзера нужен NVIDIA
-  driver. Сборка тащит cuDNN/cuBLAS — `build-sidecars.ps1` стейджит DLLs
-  рядом с sidecar (как flov делает с cublas).
-- **DirectML**: `ort` (directml feature) + `DirectML.dll` (~10 MB,
-  стейджится скриптом). Работает на любой DirectX 12 GPU (AMD/Intel/NVIDIA)
-  на Windows 10+. Дефолт на Win.
+  driver. ort 2.0.0-rc.10 ожидает **CUDA 12.x + cuDNN 9.x runtime DLLs**.
+  Эти DLLs тащим в bundle через `src-tauri/binaries/runtime/`.
+
+  Локально dev: `.\scripts\fetch-cuda-runtime.ps1` — качает официальные
+  redistributable wheels с NVIDIA PyPI (no developer account), распаковывает
+  и стейджит во все три места (`binaries/runtime/`, `target/debug/`,
+  `target/release/`). Без cuDNN ort CUDA EP **тихо** падает обратно на CPU
+  (никаких errors, просто инференс на CPU).
+
+- **DirectML**: `ort` (directml feature) + `DirectML.dll` (~10 MB).
+  Работает на любой DirectX 12 GPU (AMD/Intel/NVIDIA) на Windows 10+.
+  Никаких NVIDIA deps. Дефолт на Win если CUDA не настроена.
 - **Vulkan**: `burn` + `burn-wgpu`. Требует Vulkan loader (есть на всех
-  современных GPU). Без CUDA / DirectML deps.
+  современных GPU). Без CUDA / DirectML deps. (post-MVP)
 - **CoreML**: `ort` (coreml feature). Apple Silicon — ANE + GPU.
 - **CPU**: `ort` (default features). Везде fallback.

@@ -44,6 +44,7 @@ pub struct ItemResult {
 pub async fn rembg_run(
     inputs: Vec<String>,
     choke: f32,
+    model: Option<String>,
     state: tauri::State<'_, crate::state_cmd::AppState>,
     models_state: tauri::State<'_, crate::models_cmd::ModelState>,
     app: tauri::AppHandle,
@@ -54,7 +55,7 @@ pub async fn rembg_run(
     let backend_choice = state.backend_choice.lock().unwrap().clone();
     let models_state_cloned = (*models_state).clone();
     tauri::async_runtime::spawn_blocking(move || {
-        rembg_run_blocking(inputs, choke, backend_choice, models_state_cloned, app)
+        rembg_run_blocking(inputs, choke, model, backend_choice, models_state_cloned, app)
     })
     .await
     .map_err(|e| format!("rembg join failed: {e}"))?
@@ -63,6 +64,7 @@ pub async fn rembg_run(
 fn rembg_run_blocking(
     inputs: Vec<String>,
     choke: f32,
+    model_override: Option<String>,
     backend_choice: String,
     models_state: crate::models_cmd::ModelState,
     app: tauri::AppHandle,
@@ -70,14 +72,17 @@ fn rembg_run_blocking(
     let (backend, sidecar) =
         tools::resolve_sidecar("rembg", &backend_choice).map_err(|e| e.to_string())?;
 
-    // Read model id from nsay.toml on each batch run so a Settings
-    // change (Models panel) takes effect on the next click.
+    // Per-call override (UI dropdown) > nsay.toml > catalogue default.
     let cfg = config::Config::load().map_err(|e| e.to_string())?;
-    let model_id = if cfg.rembg.model.is_empty() {
-        "bria-rmbg-1.4".to_string()
-    } else {
-        cfg.rembg.model.clone()
-    };
+    let model_id = model_override
+        .filter(|s| !s.is_empty())
+        .unwrap_or_else(|| {
+            if cfg.rembg.model.is_empty() {
+                "bria-rmbg-1.4".to_string()
+            } else {
+                cfg.rembg.model.clone()
+            }
+        });
     // ensure_model: noop if file is on disk; otherwise streams from HF
     // and emits model-download-{start,progress,done,error}. Done once
     // per batch up front so the user doesn't see download events
@@ -237,7 +242,7 @@ fn run_one(
                         serde_json::json!({ "idx": idx, "pct": pct }),
                     );
                 } else {
-                    tracing::debug!("rembg sidecar: {}", line);
+                    tracing::info!("rembg[{}] sidecar: {}", idx, line);
                 }
             }
         });

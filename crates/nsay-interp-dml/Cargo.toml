@@ -1,0 +1,23 @@
+[package]
+name = "nsay-interp-dml"
+version = "0.1.0"
+edition = "2021"
+description = "DirectML frame interpolation sidecar for nsay (RIFE via ONNX Runtime + DML)"
+
+[workspace]
+
+[[bin]]
+name = "nsay-interp-dml"
+path = "src/main.rs"
+
+[dependencies]
+ort = { version = "=2.0.0-rc.10", default-features = false, features = ["download-binaries", "ndarray", "directml"] }
+ndarray = "0.16"
+image = { version = "0.25", default-features = false, features = ["png"] }
+anyhow = "1"
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+strip = true

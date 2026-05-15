@@ -21,6 +21,19 @@ models/*.onnx
 models/*.bin
 !models/.gitkeep
 
+# CUDA runtime DLLs — fetched via scripts/fetch-cuda-runtime.ps1
+# (NVIDIA wheels ~2 GB extracted, never commit)
+cuda-deps/
+src-tauri/binaries/runtime/*.dll
+
+# ffmpeg bundle — fetched via scripts/fetch-ffmpeg.ps1
+# (BtbN GPL build, ffmpeg.exe + ffprobe.exe ~400 MB total, never commit)
+src-tauri/binaries/ffmpeg/
+
+# Scratch / workspace junk
+icon_new.png
+*.tmp.png
+
 # Logs
 *.log
 

@@ -49,6 +49,11 @@
       "icons/icon.icns",
       "icons/icon.ico"
     ],
+    "resources": {
+      "binaries/runtime/*.dll": "./",
+      "binaries/ffmpeg/ffmpeg.exe": "binaries/ffmpeg/ffmpeg.exe",
+      "binaries/ffmpeg/ffprobe.exe": "binaries/ffmpeg/ffprobe.exe"
+    },
     "windows": {
       "webviewInstallMode": {
         "type": "embedBootstrapper"

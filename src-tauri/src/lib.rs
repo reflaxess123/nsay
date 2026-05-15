@@ -2,6 +2,7 @@
 // per-tool job runners instead of a single recording loop.
 
 pub mod config;
+pub mod ffmpeg;
 pub mod models;
 pub mod models_cmd;
 pub mod state_cmd;
@@ -12,9 +13,13 @@ use std::sync::{Arc, Mutex};
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     if let Ok(log_file) = std::fs::File::create("nsay.log") {
+        // DEBUG so sidecar stderr (line-by-line) and inference timings
+        // land in the file — INFO would hide everything we need to
+        // diagnose why a backend silently does nothing.
         let _ = tracing_subscriber::fmt()
             .with_writer(log_file)
             .with_ansi(false)
+            .with_max_level(tracing::Level::DEBUG)
             .try_init();
     }
     tracing::info!("nsay starting (Tauri)");
@@ -58,6 +63,9 @@ pub fn run() {
             models_cmd::delete_model,
             // Tools
             tools::rembg::rembg_run,
+            tools::upscale::upscale_run,
+            tools::video::video_upscale_run,
+            tools::video::video_interp_run,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

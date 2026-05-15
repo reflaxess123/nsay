@@ -80,7 +80,7 @@ impl Config {
             backend: BackendCfg::default(),
             models: ModelsCfg::default(),
             rembg: ToolCfg { model: "bria-rmbg-1.4".into() },
-            upscale: ToolCfg { model: "real-esrgan-x4plus".into() },
+            upscale: ToolCfg { model: "real-esrgan-x4".into() },
             interp: ToolCfg { model: String::new() },
             ui: UiCfg::default(),
         }

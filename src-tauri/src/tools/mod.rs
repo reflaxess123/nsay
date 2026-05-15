@@ -3,6 +3,8 @@
 // staged next to nsay_app.exe by scripts/build-sidecars.ps1.
 
 pub mod rembg;
+pub mod upscale;
+pub mod video;
 
 use anyhow::{Context, Result};
 use std::path::PathBuf;

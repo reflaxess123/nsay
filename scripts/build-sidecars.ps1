@@ -58,14 +58,33 @@ function Build-One($crateName) {
         Copy-Item $exe (Join-Path $dst "$crateName.exe") -Force
     }
 
-    # ort `download-binaries` drops onnxruntime.dll into target/<profile>/
-    # next to the binary at build time. The packaged binary loads it
-    # dynamically, so we have to ship it too.
-    $rt = Join-Path $crate "target\$Profile\onnxruntime.dll"
-    if (Test-Path $rt) {
-        foreach ($dst in $stageDirs) {
-            Copy-Item $rt (Join-Path $dst "onnxruntime.dll") -Force
+    # ort `download-binaries` extracts the onnxruntime bundle into
+    # ~/AppData/Local/ort.pyke.io/dfbin/<triple>/<hash>/onnxruntime/lib/.
+    # `onnxruntime.lib` is statically linked into the sidecar, but a few
+    # companion DLLs are loaded **dynamically at runtime** from next to the
+    # exe and must be staged:
+    #   - onnxruntime_providers_shared.dll  (CUDA EP)
+    #   - onnxruntime_providers_cuda.dll    (CUDA EP)
+    #   - DirectML.dll                      (DirectML EP)
+    # The build script writes the cache path as `cargo:rustc-link-search=
+    # native=...` in target/<profile>/build/ort-sys-*/output. Pull from
+    # there so we always grab the exact bundle this sidecar was linked
+    # against, regardless of feature flags or version bumps.
+    $ortOutFiles = Get-ChildItem -Path "$crate\target\$Profile\build" `
+        -Filter "output" -Recurse -ErrorAction SilentlyContinue |
+        Where-Object { $_.FullName -like "*ort-sys-*" }
+    foreach ($f in $ortOutFiles) {
+        $line = Select-String -Path $f.FullName -Pattern "rustc-link-search=native=.*onnxruntime\\lib" |
+            Select-Object -Last 1
+        if (-not $line) { continue }
+        $libDir = ($line.Line -split "rustc-link-search=native=", 2)[1]
+        if (-not (Test-Path $libDir)) { continue }
+        Get-ChildItem -Path $libDir -Filter "*.dll" | ForEach-Object {
+            foreach ($dst in $stageDirs) {
+                Copy-Item $_.FullName (Join-Path $dst $_.Name) -Force
+            }
         }
+        break
     }
 
     if ($crateName -like "*-cuda") {

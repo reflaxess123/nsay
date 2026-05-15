@@ -34,6 +34,13 @@ anyhow = "1"
 # HTTP for model downloads from Hugging Face
 ureq = { version = "3", features = ["json"] }
 
+# Cross-platform user-data dir (%APPDATA%/nsay/ on Win, ~/.local/share/nsay
+# on Linux, ~/Library/Application Support/nsay on Mac). Models live there
+# by default — that's the same place where every other consumer ML app
+# (Topaz, etc.) puts multi-GB downloaded weights, and it doesn't depend
+# on where the exe is.
+dirs = "5"
+
 # Logging
 tracing = "0.1"
 tracing-subscriber = "0.3"
