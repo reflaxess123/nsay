@@ -169,24 +169,33 @@ Sidecar: совместим с текущим `nsay-upscale-*` (тот же ESRG
 
 ## F4. Настоящий video SR — `vidsr` tool (L, ~1-2 недели)
 
-Самая жирная фаза. Без неё всё остальное — косметика.
+Самая жирная фаза. Runtime decision **зафиксирован** на основе deep research (см. PLAN v2 round): **libtorch (tch-rs)**, не ONNX. Все production VSR деплои (vs-basicvsrpp, Replicate) идут через PyTorch напрямую — `mmcv:grid_sampler` + `deform_conv2d` не registered в ORT, [open-mmlab/mmagic#1004](https://github.com/open-mmlab/mmagic/issues/1004) closed без resolution. ncnn тоже не катит — PNNX не имеет `torchvision.ops.deform_conv2d`.
 
-### F4.1 Новый tool `vidsr` (отдельный от `upscale`)
+DML опускаем для VSR (libtorch не имеет DML EP) → AMD/Intel юзеры на CPU vidsr с честным warning.
+
+### F4.0 Setup (✅ DONE — scripts ready, но не запущены)
+
+- ✅ `scripts/fetch-libtorch.ps1` — качает официальный libtorch zip (CUDA 12.4 ~2.3 GB или CPU ~180 MB), стейджит в `src-tauri/binaries/libtorch/`. Запуск: `.\scripts\fetch-libtorch.ps1` или `-Cpu` для лёгкого CPU билда.
+- ✅ `scripts/convert-realbasicvsr.py` — Python template, конвертит RealBasicVSR `.pth` через `torch.jit.trace` → `.pt`. Требует `pip install torch mmcv-full mmagic` в отдельном venv, плюс скачанный official `RealBasicVSR_x4.pth` с GitHub releases.
+
+### F4.1 Новый tool `vidsr` (после F4.0 запущен)
 
 Файлы:
 - `src-tauri/src/tools/mod.rs`: добавить `"vidsr"` в `TOOLS`
 - `src-tauri/src/tools/vidsr.rs`: новый runner (копия `video.rs`, но spawn'ит `nsay-vidsr-*`, не `nsay-upscale-*`)
-- `crates/nsay-vidsr-{cpu,cuda,dml}/`: новые crates
+- `crates/nsay-vidsr-{cpu,cuda}/`: новые crates на `tch = "0.24"` (без -dml — libtorch не имеет DirectML EP)
+- `crates/nsay-vidsr-lib/`: shared pipeline (window buffer + tch inference)
 
 UI:
 - Новый tab "vid SR (quality)" в `+layout.svelte` рядом с "vid upscale"
 - Старый "vid upscale" остаётся как **fast** mode с явной подписью
+- DML/AMD/Intel юзеры на vidsr tab видят honest warning "CPU only — slow"
 
 ### F4.2 Sidecar-протокол с буферизацией
 
 Текущий `--stream` делает one-frame-in / one-frame-out. Для VSR это не подходит. Два варианта (выбираем по модели):
 
-**Sliding window** (BasicVSR/RealBasicVSR в classical inference):
+**Sliding window** (RealBasicVSR в classical inference):
 
 ```
 read N frames into buffer
@@ -194,9 +203,9 @@ infer → write center frame
 slide window by 1
 ```
 
-Latency: N/2 frames. Память: N×W×H×3 байт.
+Latency: N/2 frames. Память: N×W×H×3 байт. Для 1080p × N=15 = ~93 MB.
 
-**Recurrent** (BasicVSR++ оригинальный mode):
+**Recurrent** (BasicVSR++ оригинальный mode, опционально):
 
 ```
 read frame → update hidden state → write upscaled frame
@@ -204,14 +213,24 @@ read frame → update hidden state → write upscaled frame
 
 Latency: 0. Память: hidden state (~100 MB) живёт между кадрами.
 
-Протокол args: `--stream --width W --height H --scale K --window N` или `--recurrent`. Stdin/stdout формат тот же raw RGB — ffmpeg pipe не меняется. Прогресс по stderr `frame N` (как сейчас).
+Протокол args: `--stream --width W --height H --scale K --window N` или `--recurrent`. Stdin/stdout формат тот же raw RGB — ffmpeg pipe не меняется. Прогресс по stderr `frame N` (как сейчас, namespaced `vid-vidsr-progress`).
 
-### F4.3 RealBasicVSR POC
+### F4.3 RealBasicVSR POC (после F4.0 запущен пользователем)
 
 - Source: `https://github.com/ckkelvinchan/RealBasicVSR`
-- License: Apache-2.0
-- Runtime: **проверить ONNX export первым делом**. Если оригинал — MMEditing, есть chance что operators не поддерживаются ORT. Fallback path: PyTorch sidecar через PyO3 / отдельный tch-rs binary.
-- Если ONNX не пройдёт — **остановить F4 на этом шаге** и обсудить с пользователем: тащить ли libtorch (~600 MB extra) ради VSR.
+- License: Apache-2.0 (по нашему правилу — игнорим лицензии)
+- Runtime: **libtorch через tch-rs**. ONNX путь подтверждённо мёртв.
+- Workflow:
+  1. Пользователь запускает `fetch-libtorch.ps1` (один раз, ~2.3 GB)
+  2. Пользователь скачивает `RealBasicVSR_x4.pth` с GH releases
+  3. Пользователь запускает `convert-realbasicvsr.py` → получает `.pt`
+  4. Я (или будущая сессия) пишу `crates/nsay-vidsr-cuda/` с `tch::CModule::load`, sliding-window inference, raw RGB pipe protocol
+  5. tools/vidsr.rs Tauri runner + UI tab
+- Cost ranking pick-wrong: ORT-stay (worst) > ncnn (impossible) > **tch-rs (best)**
+
+### F4.4 BasicVSR++ (опционально, после RealBasicVSR работает)
+
+Recurrent path. Тяжелее (deformable conv), но качество выше. Тот же tch-rs runtime — переиспользует инфраструктуру F4.1-3.
 
 ### F4.4 BasicVSR++ (после RealBasicVSR работает)
 

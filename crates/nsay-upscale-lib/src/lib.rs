@@ -179,11 +179,27 @@ fn run_file(session: &mut Session, input_name: &str, args: &Args) -> Result<()> 
 
 fn run_stream(session: &mut Session, input_name: &str, args: &Args) -> Result<()> {
     let frame_in_bytes = (args.width as usize) * (args.height as usize) * 3;
-    let max_out_pixels: u64 = 4 * 1024 * 1024 * 1024 / 12;
+    // Per-frame memory guard. Working set per frame in run_stream:
+    //   - input  raw RGB     u8  : W*H*3 bytes
+    //   - input  CHW         f32 : W*H*3*4 bytes
+    //   - output CHW         f32 : (W*scale)*(H*scale)*3*4 bytes
+    //   - output raw RGB     u8  : (W*scale)*(H*scale)*3 bytes
+    // Output dominates: ~ 4*scale^2*input_pixels*3*4 ≈ 12*scale²*input_pixels.
+    // Cap: 2 GB peak per frame so we leave room for the OS pipe buffer +
+    // ort intermediate tensors. Streaming holds one input + one output at
+    // a time (no sliding window in this lib — that's vidsr territory).
     let est_out_pixels = (args.width as u64) * (args.height as u64)
-        * ((args.scale * args.scale) as u64);
-    if est_out_pixels > max_out_pixels {
-        bail!("frame too large for streaming x{:.1}: {}x{}", args.scale, args.width, args.height);
+        * ((args.scale as u64) * (args.scale as u64));
+    let est_peak_bytes: u64 = est_out_pixels.saturating_mul(15); // 12 (f32 RGB) + 3 (u8 RGB)
+    let cap_bytes: u64 = 2 * 1024 * 1024 * 1024;
+    if est_peak_bytes > cap_bytes {
+        bail!(
+            "frame too large for streaming x{:.1}: {}x{} → ~{} MB peak (cap {} MB). \
+             Lower --scale or pre-resize.",
+            args.scale, args.width, args.height,
+            est_peak_bytes / (1024 * 1024),
+            cap_bytes / (1024 * 1024),
+        );
     }
 
     let _ = writeln!(std::io::stderr(), "stream-ready");

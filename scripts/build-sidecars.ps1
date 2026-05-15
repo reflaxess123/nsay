@@ -29,9 +29,38 @@ $stageDirs = @(
 )
 
 # Source for runtime DLLs that CUDA-feature ort dynamically loads at startup.
-# Adjust if CUDA installs elsewhere.
-$cudaBin = "C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v13.2\bin\x64"
-$cudaDlls = @("cublas64_13.dll", "cublasLt64_13.dll", "cudart64_13.dll", "cudnn64_9.dll")
+# Auto-detect the highest installed CUDA version under the standard NVIDIA
+# Toolkit path; let -CudaBin override. Falls back to v13.2 only if scan
+# returns nothing (preserves the old hard-coded behaviour for clean repos).
+$cudaRoot = "C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA"
+$cudaBin = $null
+if (Test-Path $cudaRoot) {
+    $latest = Get-ChildItem $cudaRoot -Directory -Filter "v*" -ErrorAction SilentlyContinue |
+        Sort-Object { [version]($_.Name -replace '^v','') } -Descending |
+        Select-Object -First 1
+    if ($latest) {
+        $candidate = Join-Path $latest.FullName "bin\x64"
+        if (Test-Path $candidate) { $cudaBin = $candidate }
+    }
+}
+if (-not $cudaBin) { $cudaBin = "$cudaRoot\v13.2\bin\x64" }
+
+# Pick cudart/cublas major suffix from the actual filenames present in
+# $cudaBin instead of hard-coding cublas64_13. cudnn major still hard-
+# coded to 9 (ort 2.0.0-rc.10 needs cuDNN 9.x specifically).
+$cudaDlls = @()
+if (Test-Path $cudaBin) {
+    foreach ($pat in "cublas64_*.dll", "cublasLt64_*.dll", "cudart64_*.dll") {
+        $f = Get-ChildItem $cudaBin -Filter $pat -ErrorAction SilentlyContinue |
+            Select-Object -First 1
+        if ($f) { $cudaDlls += $f.Name }
+    }
+    $cudnn = Get-ChildItem $cudaBin -Filter "cudnn64_9*.dll" -ErrorAction SilentlyContinue |
+        Select-Object -First 1
+    if ($cudnn) { $cudaDlls += $cudnn.Name }
+}
+Write-Host "CUDA bin: $cudaBin" -ForegroundColor DarkGray
+Write-Host "CUDA DLLs: $($cudaDlls -join ', ')" -ForegroundColor DarkGray
 
 function Build-One($crateName) {
     $crate = Join-Path $cratesDir $crateName
