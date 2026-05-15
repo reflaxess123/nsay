@@ -906,6 +906,15 @@ name = "nsay-rembg-dml"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "nsay-rembg-lib",
+ "ort",
+]
+
+[[package]]
+name = "nsay-rembg-lib"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
  "image",
  "imageproc",
  "ndarray",

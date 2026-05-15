@@ -109,9 +109,11 @@ function Stage-CudaDlls {
     }
 }
 
-# Enumerate crates/nsay-<tool>-<backend> that match the filters.
+# Enumerate crates/nsay-<tool>-<backend> that match the filters. Exclude
+# `nsay-<tool>-lib` shared-pipeline crates — they're library deps of the
+# bin crates, not buildable sidecars themselves (no [[bin]], no exe out).
 $candidates = Get-ChildItem $cratesDir -Directory -ErrorAction SilentlyContinue |
-    Where-Object { $_.Name -like "nsay-*-*" }
+    Where-Object { $_.Name -like "nsay-*-*" -and $_.Name -notlike "*-lib" }
 
 foreach ($d in $candidates) {
     $parts = $d.Name -split "-"

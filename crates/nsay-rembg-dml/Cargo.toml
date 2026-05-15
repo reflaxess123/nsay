@@ -12,16 +12,12 @@ name = "nsay-rembg-dml"
 path = "src/main.rs"
 
 [dependencies]
-# DirectML EP works on any DirectX 12 GPU on Windows 10+ (AMD / Intel /
-# NVIDIA). Requires DirectML.dll alongside the binary — `download-binaries`
-# does NOT ship it; build-sidecars.ps1 copies it from the system or a
-# vendored copy.
+# Pipeline logic + image deps from shared lib. We add ort directly with
+# the `directml` feature so cargo feature-unifies it into the lib's
+# transitive ort dep — that's what makes DirectMLExecutionProvider
+# available in `nsay_rembg_lib::ort::execution_providers`.
+nsay-rembg-lib = { path = "../nsay-rembg-lib" }
 ort = { version = "=2.0.0-rc.10", default-features = false, features = ["download-binaries", "ndarray", "directml"] }
-
-ndarray = "0.16"
-image = { version = "0.25", default-features = false, features = ["png", "jpeg", "webp", "bmp", "tiff"] }
-imageproc = "0.25"
-
 anyhow = "1"
 
 [profile.release]

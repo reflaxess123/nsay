@@ -460,6 +460,15 @@ name = "nsay-upscale-cuda"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "nsay-upscale-lib",
+ "ort",
+]
+
+[[package]]
+name = "nsay-upscale-lib"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
  "image",
  "ndarray",
  "ort",

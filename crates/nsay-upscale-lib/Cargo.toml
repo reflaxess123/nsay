@@ -1,0 +1,19 @@
+[package]
+name = "nsay-upscale-lib"
+version = "0.1.0"
+edition = "2021"
+description = "Shared upscale sidecar logic (Real-ESRGAN x2/x4 + tile blending + streaming). Each backend bin (cpu/cuda/dml) is a thin wrapper that registers its execution provider and calls run()."
+
+[workspace]
+
+[lib]
+name = "nsay_upscale_lib"
+path = "src/lib.rs"
+
+[dependencies]
+ort = { version = "=2.0.0-rc.10", default-features = false, features = ["download-binaries", "ndarray"] }
+
+ndarray = "0.16"
+image = { version = "0.25", default-features = false, features = ["png", "jpeg", "webp", "bmp", "tiff"] }
+
+anyhow = "1"

@@ -13,15 +13,12 @@ name = "nsay-rembg-cuda"
 path = "src/main.rs"
 
 [dependencies]
-# `cuda` feature pulls the CUDA EP into the prebuilt onnxruntime that
-# `download-binaries` fetches. Requires NVIDIA driver + cuDNN/cuBLAS DLLs
-# at runtime (staged by scripts/build-sidecars.ps1).
+# Pipeline logic + image deps from shared lib. We add ort directly with
+# the `cuda` feature so cargo feature-unifies it into the lib's transitive
+# ort dep — that's what makes CUDAExecutionProvider available in
+# `nsay_rembg_lib::ort::execution_providers`.
+nsay-rembg-lib = { path = "../nsay-rembg-lib" }
 ort = { version = "=2.0.0-rc.10", default-features = false, features = ["download-binaries", "ndarray", "cuda"] }
-
-ndarray = "0.16"
-image = { version = "0.25", default-features = false, features = ["png", "jpeg", "webp", "bmp", "tiff"] }
-imageproc = "0.25"
-
 anyhow = "1"
 
 [profile.release]

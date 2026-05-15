@@ -460,6 +460,14 @@ name = "nsay-upscale-cpu"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "nsay-upscale-lib",
+]
+
+[[package]]
+name = "nsay-upscale-lib"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
  "image",
  "ndarray",
  "ort",

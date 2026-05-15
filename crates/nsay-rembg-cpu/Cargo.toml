@@ -13,17 +13,10 @@ name = "nsay-rembg-cpu"
 path = "src/main.rs"
 
 [dependencies]
-# ort 2.x — Rust API over ONNX Runtime C++. CPU EP is the default; no
-# extra features = no GPU dependencies.
-# `download-binaries` makes ort fetch the prebuilt onnxruntime native lib
-# at build time so we don't need a system install. `ndarray` feature
-# enables the `Tensor::from_array` convenience used below.
-ort = { version = "=2.0.0-rc.10", default-features = false, features = ["download-binaries", "ndarray"] }
-
-ndarray = "0.16"
-image = { version = "0.25", default-features = false, features = ["png", "jpeg", "webp", "bmp", "tiff"] }
-imageproc = "0.25"
-
+# All pipeline logic + ort + image deps come from the shared lib crate.
+# CPU sidecar passes the identity closure — no EP registered, runs on
+# the default CPU EP that ort always provides.
+nsay-rembg-lib = { path = "../nsay-rembg-lib" }
 anyhow = "1"
 
 [profile.release]

@@ -11,11 +11,10 @@ name = "nsay-upscale-dml"
 path = "src/main.rs"
 
 [dependencies]
+# Pipeline logic + image deps from shared lib. ort declared directly with
+# `directml` feature so cargo unifies it into the lib's transitive ort dep.
+nsay-upscale-lib = { path = "../nsay-upscale-lib" }
 ort = { version = "=2.0.0-rc.10", default-features = false, features = ["download-binaries", "ndarray", "directml"] }
-
-ndarray = "0.16"
-image = { version = "0.25", default-features = false, features = ["png", "jpeg", "webp", "bmp", "tiff"] }
-
 anyhow = "1"
 
 [profile.release]

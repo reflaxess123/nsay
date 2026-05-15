@@ -906,6 +906,14 @@ name = "nsay-rembg-cpu"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "nsay-rembg-lib",
+]
+
+[[package]]
+name = "nsay-rembg-lib"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
  "image",
  "imageproc",
  "ndarray",

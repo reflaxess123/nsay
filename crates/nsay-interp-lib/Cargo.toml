@@ -1,0 +1,16 @@
+[package]
+name = "nsay-interp-lib"
+version = "0.1.0"
+edition = "2021"
+description = "Shared frame interpolation sidecar logic (RIFE 4.9 streaming pipeline). Each backend bin (cpu/cuda/dml) is a thin wrapper that registers its execution provider and calls run()."
+
+[workspace]
+
+[lib]
+name = "nsay_interp_lib"
+path = "src/lib.rs"
+
+[dependencies]
+ort = { version = "=2.0.0-rc.10", default-features = false, features = ["download-binaries", "ndarray"] }
+ndarray = "0.16"
+anyhow = "1"
