@@ -138,6 +138,48 @@ pub const CATALOG: &[ModelEntry] = &[
         output_scale: 4,
         preset: "hat",
     },
+    // LSDIR-trained RRDBNet — same ESRGAN architecture but trained on
+    // the LSDIR dataset (Large Scale Dataset for Image Restoration).
+    // Sharper than vanilla Real-ESRGAN on photographs.
+    ModelEntry {
+        id: "lsdir-x4",
+        family: "upscale",
+        label: "LSDIR ×4 (photo, sharp)",
+        url: "https://huggingface.co/crj/dl-ws/resolve/main/lsdir_x4.onnx",
+        filename: "lsdir-x4.onnx",
+        size_mb: 64,
+        sha256: "",
+        output_scale: 4,
+        preset: "esrgan",
+    },
+    // Nomos8k SC — RRDBNet trained on the Nomos8k Snake Camera dataset
+    // (street photography). Better than Real-ESRGAN on natural textures
+    // / outdoor photography.
+    ModelEntry {
+        id: "nomos8k-x4",
+        family: "upscale",
+        label: "Nomos8k ×4 (photo, natural)",
+        url: "https://huggingface.co/crj/dl-ws/resolve/main/nomos8k_sc_x4.onnx",
+        filename: "nomos8k-x4.onnx",
+        size_mb: 64,
+        sha256: "",
+        output_scale: 4,
+        preset: "esrgan",
+    },
+    // SPAN (Swift Parameter-free Attention Network) — modern lightweight
+    // architecture, only 1.6 MB. Trained on Kendata. Massive throughput
+    // win vs RRDBNet/HAT on big batches at the cost of some peak quality.
+    ModelEntry {
+        id: "span-x4",
+        family: "upscale",
+        label: "SPAN ×4 (lightweight, fast)",
+        url: "https://huggingface.co/crj/dl-ws/resolve/main/span_kendata_x4.onnx",
+        filename: "span-x4.onnx",
+        size_mb: 2,
+        sha256: "",
+        output_scale: 4,
+        preset: "esrgan",
+    },
     // Frame interpolation — RIFE (Real-time Intermediate Flow Estimation).
     // 4.26 has no public ONNX export (only .pth in Practical-RIFE);
     // we'll add a self-converted 4.26 later. 4.9 from yuvraj108c is the

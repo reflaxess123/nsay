@@ -49,6 +49,18 @@ $catalog = @{
         url      = "https://huggingface.co/crj/dl-ws/resolve/main/real_hatgan_x4.onnx"
         filename = "real-hatgan-x4.onnx"
     }
+    "lsdir-x4" = @{
+        url      = "https://huggingface.co/crj/dl-ws/resolve/main/lsdir_x4.onnx"
+        filename = "lsdir-x4.onnx"
+    }
+    "nomos8k-x4" = @{
+        url      = "https://huggingface.co/crj/dl-ws/resolve/main/nomos8k_sc_x4.onnx"
+        filename = "nomos8k-x4.onnx"
+    }
+    "span-x4" = @{
+        url      = "https://huggingface.co/crj/dl-ws/resolve/main/span_kendata_x4.onnx"
+        filename = "span-x4.onnx"
+    }
     "rife-4.9" = @{
         url      = "https://huggingface.co/yuvraj108c/rife-onnx/resolve/main/rife49_ensemble_True_scale_1_sim.onnx"
         filename = "rife-4.9.onnx"
