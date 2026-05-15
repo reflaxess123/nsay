@@ -36,26 +36,26 @@ export function vidSlowInit() {
   if (initialized) return;
   initialized = true;
 
-  // Note: vid-* events are shared with vidUpscale. Both stores listen and
-  // each updates its own copy — only one of the two pages is "running" at
-  // a time, so the cross-talk is harmless (the idle store overwrites with
-  // the same values it already had).
+  // Namespaced per-tool events — see src-tauri/src/tools/video.rs.
+  // The status guards are belt-and-suspenders now that events are
+  // tool-specific; before namespacing they were the only thing
+  // preventing vidUpscale runs from updating this store.
   listen<{
     src_w: number; src_h: number; out_w: number; out_h: number;
     fps_num: number; fps_den: number; total_frames: number;
     backend: string; encoder: string;
-  }>("vid-start", (e) => {
+  }>("vid-interp-start", (e) => {
     if (vidSlowStore.status !== "running") return;
     vidSlowStore.probe = e.payload;
     vidSlowStore.pct = 0;
     vidSlowStore.frame = 0;
   });
-  listen<{ frame: number; total: number; pct: number }>("vid-progress", (e) => {
+  listen<{ frame: number; total: number; pct: number }>("vid-interp-progress", (e) => {
     if (vidSlowStore.status !== "running") return;
     vidSlowStore.frame = e.payload.frame;
     vidSlowStore.pct = e.payload.pct;
   });
-  listen<{ output: string }>("vid-done", (e) => {
+  listen<{ output: string }>("vid-interp-done", (e) => {
     if (vidSlowStore.status !== "running") return;
     vidSlowStore.output = e.payload.output;
     vidSlowStore.outputUrl = convertFileSrc(e.payload.output);

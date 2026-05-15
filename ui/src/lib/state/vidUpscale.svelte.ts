@@ -36,20 +36,23 @@ export function vidUpscaleInit() {
   if (initialized) return;
   initialized = true;
 
+  // Namespaced per-tool events — see src-tauri/src/tools/video.rs.
+  // Used to be a shared `vid-*` channel that both stores listened to,
+  // which cross-talked progress between vidUpscale and vidSlow runs.
   listen<{
     src_w: number; src_h: number; out_w: number; out_h: number;
     fps_num: number; fps_den: number; total_frames: number;
     backend: string; encoder: string;
-  }>("vid-start", (e) => {
+  }>("vid-upscale-start", (e) => {
     vidUpscaleStore.probe = e.payload;
     vidUpscaleStore.pct = 0;
     vidUpscaleStore.frame = 0;
   });
-  listen<{ frame: number; total: number; pct: number }>("vid-progress", (e) => {
+  listen<{ frame: number; total: number; pct: number }>("vid-upscale-progress", (e) => {
     vidUpscaleStore.frame = e.payload.frame;
     vidUpscaleStore.pct = e.payload.pct;
   });
-  listen<{ output: string }>("vid-done", (e) => {
+  listen<{ output: string }>("vid-upscale-done", (e) => {
     vidUpscaleStore.output = e.payload.output;
     vidUpscaleStore.outputUrl = convertFileSrc(e.payload.output);
     vidUpscaleStore.bust = Date.now();

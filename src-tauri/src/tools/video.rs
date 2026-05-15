@@ -132,7 +132,7 @@ fn run_blocking(
     let out_h = new_h * model_scale;
 
     let _ = app.emit(
-        "vid-start",
+        "vid-upscale-start",
         serde_json::json!({
             "total_frames": probe.total_frames,
             "src_w": probe.width, "src_h": probe.height,
@@ -171,9 +171,8 @@ fn run_blocking(
         .stderr(Stdio::piped());
     let mut side_proc = side.spawn().map_err(|e| format!("spawn sidecar: {e}"))?;
     let side_stdout = side_proc.stdout.take().unwrap();
-    let app_for_progress = app.clone();
     let total = probe.total_frames;
-    spawn_progress("sidecar", side_proc.stderr.take().unwrap(), app_for_progress, total);
+    spawn_progress("sidecar", "vid-upscale-progress", side_proc.stderr.take().unwrap(), app.clone(), total);
 
     // ---- stage 3: ffmpeg write (encode + audio mux from source) ----
     let fps_str = format!("{}/{}", probe.fps_num, probe.fps_den);
@@ -205,20 +204,9 @@ fn run_blocking(
     let mut write_proc = write.spawn().map_err(|e| format!("spawn ffmpeg-write: {e}"))?;
     spawn_logger("ffmpeg-write", write_proc.stderr.take().unwrap());
 
-    // ---- wait all three; aggregate exit codes ----
-    let read_status = read_proc.wait().map_err(|e| e.to_string())?;
-    let side_status = side_proc.wait().map_err(|e| e.to_string())?;
-    let write_status = write_proc.wait().map_err(|e| e.to_string())?;
-
-    if !read_status.success() {
-        return Err(format!("ffmpeg-read exited {:?}", read_status.code()));
-    }
-    if !side_status.success() {
-        return Err(format!("sidecar exited {:?}", side_status.code()));
-    }
-    if !write_status.success() {
-        return Err(format!("ffmpeg-write exited {:?}", write_status.code()));
-    }
+    // Parallel wait — first non-zero exit kills the other two so we don't
+    // hang on a doomed pipe (sidecar panic → read blocked on EPIPE).
+    wait_pipeline(read_proc, side_proc, write_proc)?;
 
     let result = VideoResult {
         output: output_pb.to_string_lossy().into_owned(),
@@ -226,7 +214,7 @@ fn run_blocking(
         backend: backend.clone(),
         encoder: encoder.family.to_string(),
     };
-    let _ = app.emit("vid-done", &result);
+    let _ = app.emit("vid-upscale-done", &result);
     Ok(result)
 }
 
@@ -285,7 +273,7 @@ fn run_interp_blocking(
     );
 
     let _ = app.emit(
-        "vid-start",
+        "vid-interp-start",
         serde_json::json!({
             "total_frames": out_frames,
             "src_w": probe.width, "src_h": probe.height,
@@ -323,7 +311,7 @@ fn run_interp_blocking(
         .stderr(Stdio::piped());
     let mut side_proc = side.spawn().map_err(|e| format!("spawn sidecar: {e}"))?;
     let side_stdout = side_proc.stdout.take().unwrap();
-    spawn_progress("interp", side_proc.stderr.take().unwrap(), app.clone(), out_frames);
+    spawn_progress("interp", "vid-interp-progress", side_proc.stderr.take().unwrap(), app.clone(), out_frames);
 
     // ---- stage 3: ffmpeg write ----
     // Boost: keep audio (`-map 1:a? -c:a copy`) — duration matches source.
@@ -368,19 +356,7 @@ fn run_interp_blocking(
     let mut write_proc = write.spawn().map_err(|e| format!("spawn ffmpeg-write: {e}"))?;
     spawn_logger("ffmpeg-write", write_proc.stderr.take().unwrap());
 
-    let read_status = read_proc.wait().map_err(|e| e.to_string())?;
-    let side_status = side_proc.wait().map_err(|e| e.to_string())?;
-    let write_status = write_proc.wait().map_err(|e| e.to_string())?;
-
-    if !read_status.success() {
-        return Err(format!("ffmpeg-read exited {:?}", read_status.code()));
-    }
-    if !side_status.success() {
-        return Err(format!("interp sidecar exited {:?}", side_status.code()));
-    }
-    if !write_status.success() {
-        return Err(format!("ffmpeg-write exited {:?}", write_status.code()));
-    }
+    wait_pipeline(read_proc, side_proc, write_proc)?;
 
     let result = VideoResult {
         output: output_pb.to_string_lossy().into_owned(),
@@ -388,7 +364,7 @@ fn run_interp_blocking(
         backend: backend.clone(),
         encoder: encoder.family.to_string(),
     };
-    let _ = app.emit("vid-done", &result);
+    let _ = app.emit("vid-interp-done", &result);
     Ok(result)
 }
 
@@ -408,10 +384,14 @@ fn spawn_logger(label: &'static str, stderr: std::process::ChildStderr) {
     });
 }
 
-/// Parse sidecar stderr for `frame N` lines and emit `vid-progress`
-/// events. Logs everything else (warnings, EP messages) at INFO.
+/// Parse sidecar stderr for `frame N` lines and emit progress events on
+/// `event_name`. Logs everything else (warnings, EP messages) at INFO.
+/// `event_name` is namespaced per tool — `vid-upscale-progress` /
+/// `vid-interp-progress` — so two stores listening at once don't update
+/// each other's progress bars.
 fn spawn_progress(
     label: &'static str,
+    event_name: &'static str,
     stderr: std::process::ChildStderr,
     app: tauri::AppHandle,
     total: u64,
@@ -423,7 +403,7 @@ fn spawn_progress(
                 if let Ok(n) = rest.trim().parse::<u64>() {
                     let pct = if total > 0 { ((n * 100) / total).min(100) } else { 0 };
                     let _ = app.emit(
-                        "vid-progress",
+                        event_name,
                         serde_json::json!({ "frame": n, "total": total, "pct": pct }),
                     );
                     continue;
@@ -432,4 +412,85 @@ fn spawn_progress(
             tracing::info!("{}: {}", label, line);
         }
     });
+}
+
+/// Wait for three pipeline processes (read → sidecar → write) in parallel.
+/// If any one fails (non-zero exit), the others are killed immediately so
+/// the call returns instead of hanging on a blocked pipe.
+///
+/// Hang scenario this fixes: sidecar panics mid-stream → its stdout closes
+/// → ffmpeg-write reads EOF and exits cleanly with the partial frames it
+/// already had → ffmpeg-read's pipe to the dead sidecar fills up → read
+/// blocks on write forever → sequential `read.wait()` first never returns.
+/// Sequential wait also reports "ffmpeg-read exited 1" instead of the
+/// real "sidecar exited" root cause, which is a misleading error.
+fn wait_pipeline(
+    read_proc: std::process::Child,
+    side_proc: std::process::Child,
+    write_proc: std::process::Child,
+) -> Result<(), String> {
+    use std::sync::mpsc;
+    type WaitMsg = (&'static str, std::io::Result<std::process::ExitStatus>);
+    let (tx, rx) = mpsc::channel::<WaitMsg>();
+
+    // Snapshot pids so we can kill survivors even after the Child moves
+    // into its waiter thread (Child::kill needs &mut, we can't share it).
+    let pids = [
+        ("read",  read_proc.id()),
+        ("side",  side_proc.id()),
+        ("write", write_proc.id()),
+    ];
+
+    for (label, mut child, sender) in [
+        ("read",  read_proc,  tx.clone()),
+        ("side",  side_proc,  tx.clone()),
+        ("write", write_proc, tx),
+    ] {
+        std::thread::spawn(move || {
+            let _ = sender.send((label, child.wait()));
+        });
+    }
+
+    let mut remaining = 3;
+    let mut killed = false;
+    let mut first_failure: Option<String> = None;
+    while remaining > 0 {
+        let (label, status) = rx.recv().map_err(|e| format!("pipeline channel: {e}"))?;
+        remaining -= 1;
+        match status {
+            Ok(s) if !s.success() && !killed => {
+                killed = true;
+                first_failure = Some(format!("{} exited {:?}", label, s.code()));
+                for (l, pid) in pids.iter() {
+                    if *l != label { kill_pid(*pid); }
+                }
+            }
+            Ok(_) => {}
+            Err(e) => {
+                if first_failure.is_none() {
+                    first_failure = Some(format!("{} wait failed: {e}", label));
+                }
+            }
+        }
+    }
+    match first_failure {
+        Some(msg) => Err(msg),
+        None => Ok(()),
+    }
+}
+
+#[cfg(target_os = "windows")]
+fn kill_pid(pid: u32) {
+    let _ = std::process::Command::new("taskkill")
+        .args(["/F", "/T", "/PID", &pid.to_string()])
+        .creation_flags(CREATE_NO_WINDOW)
+        .status();
+}
+
+#[cfg(not(target_os = "windows"))]
+fn kill_pid(pid: u32) {
+    // POSIX: shell out to kill instead of pulling in libc just for SIGKILL.
+    let _ = std::process::Command::new("kill")
+        .args(["-9", &pid.to_string()])
+        .status();
 }
