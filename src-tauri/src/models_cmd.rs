@@ -196,6 +196,7 @@ fn download_to(
     id: &str,
 ) -> anyhow::Result<()> {
     use std::io::Read;
+    use sha2::{Digest, Sha256};
     tracing::info!("downloading {} → {}", url, dest.display());
     let response = ureq::get(url).call()?;
 
@@ -212,6 +213,9 @@ fn download_to(
     let mut buf = [0u8; 64 * 1024];
     let mut downloaded: u64 = 0;
     let mut last_pct = 0u8;
+    // Hash incrementally as we write so we don't have to re-read the full
+    // multi-hundred-MB file from disk just to verify.
+    let mut hasher = Sha256::new();
 
     loop {
         let n = reader.read(&mut buf)?;
@@ -219,6 +223,7 @@ fn download_to(
             break;
         }
         std::io::Write::write_all(&mut file, &buf[..n])?;
+        hasher.update(&buf[..n]);
         downloaded += n as u64;
         if total > 0 {
             let pct = ((downloaded * 100) / total) as u8;
@@ -234,6 +239,26 @@ fn download_to(
     }
 
     drop(file);
+
+    // Verify before publishing the file under its final name. If the catalog
+    // pinned a sha256 and the download doesn't match, drop the .part and
+    // refuse to install — partial / corrupted weights produce inscrutable
+    // ONNX errors at first inference and waste GB of bandwidth on retry.
+    if let Some(entry) = crate::models::find(id) {
+        if !entry.sha256.is_empty() {
+            let actual = format!("{:x}", hasher.finalize());
+            let expected = entry.sha256.to_ascii_lowercase();
+            if actual != expected {
+                let _ = std::fs::remove_file(&tmp);
+                anyhow::bail!(
+                    "sha256 mismatch for {}: expected {}, got {} (file removed)",
+                    id, expected, actual,
+                );
+            }
+            tracing::info!("sha256 verified for {}", id);
+        }
+    }
+
     std::fs::rename(&tmp, dest)?;
     Ok(())
 }

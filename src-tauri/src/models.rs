@@ -11,13 +11,20 @@ pub struct ModelEntry {
     pub url: &'static str,
     pub filename: &'static str,
     pub size_mb: u32,
-    /// Optional sha256 for verification (hex). Skipped if empty.
+    /// Optional sha256 for verification (hex, lowercase). Skipped if empty.
+    /// `models_cmd::download_to` recomputes after writing and rejects on
+    /// mismatch. Migration is gradual — fill in as we add models.
     pub sha256: &'static str,
     /// For `upscale` models: the model's native output:input ratio (2 or 4).
     /// The runner uses this to pick a pre-resize ratio so the user-requested
     /// scale × source = source × model_scale × ratio holds. For non-upscale
     /// families this is 0 and ignored.
     pub output_scale: u32,
+    /// Preprocessing/postprocessing flavour the sidecar should use. Stays
+    /// "default" until we ship a model with non-stock normalize (BEN2,
+    /// BiRefNet — F2 in PLAN.md). Sidecar lib reads it via the `--preset`
+    /// CLI arg, dispatches to the right preprocess/postprocess.
+    pub preset: &'static str,
 }
 
 pub const CATALOG: &[ModelEntry] = &[
@@ -34,6 +41,7 @@ pub const CATALOG: &[ModelEntry] = &[
         size_mb: 176,
         sha256: "",
         output_scale: 0,
+        preset: "bria-rmbg",
     },
     ModelEntry {
         id: "bria-rmbg-1.4-fp16",
@@ -44,6 +52,7 @@ pub const CATALOG: &[ModelEntry] = &[
         size_mb: 88,
         sha256: "",
         output_scale: 0,
+        preset: "bria-rmbg",
     },
     // Upscale catalogue. All from crj/dl-ws — same export convention
     // (input "input.1", dynamic [N, 3, H, W], pixel/255 normalisation).
@@ -56,6 +65,7 @@ pub const CATALOG: &[ModelEntry] = &[
         size_mb: 67,
         sha256: "",
         output_scale: 4,
+        preset: "esrgan",
     },
     ModelEntry {
         id: "real-esrgan-x2",
@@ -69,6 +79,7 @@ pub const CATALOG: &[ModelEntry] = &[
         size_mb: 67,
         sha256: "",
         output_scale: 2,
+        preset: "esrgan",
     },
     ModelEntry {
         id: "real-hatgan-x4",
@@ -82,6 +93,7 @@ pub const CATALOG: &[ModelEntry] = &[
         size_mb: 153,
         sha256: "",
         output_scale: 4,
+        preset: "hat",
     },
     // Frame interpolation — RIFE (Real-time Intermediate Flow Estimation).
     // 4.26 has no public ONNX export (only .pth in Practical-RIFE);
@@ -98,6 +110,7 @@ pub const CATALOG: &[ModelEntry] = &[
         size_mb: 21,
         sha256: "",
         output_scale: 0,
+        preset: "rife",
     },
 ];
 

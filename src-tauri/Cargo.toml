@@ -34,6 +34,10 @@ anyhow = "1"
 # HTTP for model downloads from Hugging Face
 ureq = { version = "3", features = ["json"] }
 
+# SHA-256 for downloaded model verification (skipped if catalog entry
+# has empty sha256 — migration is gradual).
+sha2 = "0.10"
+
 # Cross-platform user-data dir (%APPDATA%/nsay/ on Win, ~/.local/share/nsay
 # on Linux, ~/Library/Application Support/nsay on Mac). Models live there
 # by default — that's the same place where every other consumer ML app
